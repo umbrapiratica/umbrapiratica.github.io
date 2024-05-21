@@ -1,0 +1,48 @@
+body {
+    background-color: #0f0f0f;
+    color: #00ff00;
+    font-family: 'Courier New', Courier, monospace;
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    background-color: #000000;
+    padding: 20px;
+    text-align: center;
+}
+
+header h1 {
+    color: #ff00ff;
+    font-size: 3em;
+    margin: 0;
+    text-shadow: 2px 2px #00ffff;
+}
+
+main {
+    padding: 20px;
+}
+
+footer {
+    background-color: #000000;
+    color: #00ff00;
+    text-align: center;
+    padding: 10px;
+    position: fixed;
+    width: 100%;
+    bottom: 0;
+}
+
+nav {
+    margin-top: 10px;
+}
+
+nav a {
+    color: #00ffff;
+    text-decoration: none;
+    margin: 0 15px;
+}
+
+nav a:hover {
+    text-shadow: 0 0 10px #ff00ff;
+}

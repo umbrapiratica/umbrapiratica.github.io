@@ -1,6 +1,8 @@
 ---
-# Feel free to add content and custom Front Matter to this file.
-# To modify the layout, see https://jekyllrb.com/docs/themes/#overriding-theme-defaults
-
-layout: home
+layout: cyberpunk
+title: Home
 ---
+
+# Welcome to My Cyberpunk OSCP Cheat Sheets
+
+Here you can find all my notes and resources for OSCP, styled with a cyberpunk theme.
