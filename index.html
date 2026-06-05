@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guadalupe Hernandez &mdash; Security Analyst</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#07080d;
+  --surface:#0b0e18;
+  --surface-2:#101422;
+  --surface-3:#161b2c;
+  --accent:#c8942a;
+  --accent-dim:rgba(200,148,42,0.09);
+  --accent-mid:rgba(200,148,42,0.22);
+  --accent-bright:rgba(200,148,42,0.45);
+  --red:#b84035;
+  --green:#2e7a50;
+  --text:#e0dbd3;
+  --text-muted:#686c82;
+  --text-dim:#3e4158;
+  --border:rgba(200,148,42,0.11);
+  --border-mid:rgba(200,148,42,0.28);
+  --ff-display:'Crimson Pro',Georgia,serif;
+  --ff-mono:'JetBrains Mono','Fira Code',monospace;
+  --ease:cubic-bezier(.4,0,.2,1);
+  --r:4px;
+}
+
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--ff-display);font-size:1.05rem;line-height:1.75;overflow-x:hidden}
+
+/* ── NAV ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.25rem 3rem;display:flex;align-items:center;justify-content:space-between;transition:background 400ms var(--ease),backdrop-filter 400ms var(--ease)}
+nav.scrolled{background:rgba(7,8,13,0.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-name{font-family:var(--ff-mono);font-size:.75rem;letter-spacing:.08em;color:var(--accent);text-decoration:none;opacity:.85}
+.nav-links{display:flex;gap:2.5rem;list-style:none}
+.nav-links a{font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);text-decoration:none;transition:color 200ms}
+.nav-links a:hover{color:var(--accent)}
+
+/* ── HERO ── */
+#hero{position:relative;min-height:100vh;display:flex;align-items:center;overflow:hidden}
+#graph-canvas{position:absolute;inset:0;width:100%;height:100%}
+.hero-content{position:relative;z-index:2;padding:0 3rem;max-width:900px}
+.hero-label{font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:1.75rem;opacity:.9}
+.hero-name{font-family:var(--ff-display);font-size:clamp(3.5rem,7vw,6rem);font-weight:300;font-style:italic;line-height:1.03;color:var(--text);margin-bottom:1rem}
+.hero-role{font-family:var(--ff-mono);font-size:clamp(.8rem,1.4vw,1rem);color:var(--text-muted);letter-spacing:.06em;margin-bottom:2.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.hero-role span{color:var(--text-dim)}
+.hero-tagline{font-family:var(--ff-display);font-size:clamp(1.1rem,2vw,1.4rem);font-weight:300;color:var(--text-muted);max-width:500px;line-height:1.6;border-left:2px solid var(--accent);padding-left:1.25rem;font-style:italic}
+.hero-cta{margin-top:3rem;display:flex;gap:1rem;flex-wrap:wrap}
+.btn{font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;padding:.75rem 1.75rem;border-radius:var(--r);text-decoration:none;transition:all 220ms var(--ease);cursor:pointer;display:inline-block}
+.btn-primary{background:var(--accent);color:#07080d;border:1px solid var(--accent)}
+.btn-primary:hover{background:transparent;color:var(--accent)}
+.btn-ghost{background:transparent;color:var(--text-muted);border:1px solid var(--border-mid)}
+.btn-ghost:hover{color:var(--accent);border-color:var(--accent)}
+.hero-scroll{position:absolute;bottom:2rem;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:.5rem;opacity:.4}
+.scroll-line{width:1px;height:3rem;background:linear-gradient(to bottom,var(--accent),transparent);animation:scrollPulse 2s ease-in-out infinite}
+@keyframes scrollPulse{0%,100%{opacity:.4;transform:scaleY(1)}50%{opacity:.8;transform:scaleY(1.15)}}
+
+/* ── SECTIONS ── */
+section{padding:7rem 3rem;max-width:1100px;margin:0 auto}
+.section-eyebrow{font-family:var(--ff-mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:.9rem;opacity:.9}
+.section-heading{font-family:var(--ff-display);font-size:clamp(2rem,3.5vw,2.75rem);font-weight:300;font-style:italic;color:var(--text);line-height:1.12;margin-bottom:3rem}
+.divider{width:100%;height:1px;background:var(--border);margin:0}
+
+/* ── ABOUT ── */
+.about-grid{display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start}
+.about-text p{color:var(--text-muted);margin-bottom:1.25rem;font-size:1.05rem}
+.about-text p strong{color:var(--text);font-weight:600}
+.about-stat{font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.08em;color:var(--text-muted);text-transform:uppercase;padding:.5rem 0;border-top:1px solid var(--border)}
+.stat-value{font-family:var(--ff-display);font-size:1.6rem;font-weight:400;color:var(--accent);display:block;font-style:italic}
+
+/* ── CREDENTIALS ── */
+.certs-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:1rem}
+.cert-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.25rem 1.5rem;transition:border-color 220ms,background 220ms}
+.cert-card:hover{border-color:var(--border-mid);background:var(--surface-2)}
+.cert-issuer{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.4rem;opacity:.85}
+.cert-name{font-family:var(--ff-display);font-size:1.05rem;color:var(--text);font-weight:400}
+.cert-badge{display:inline-block;font-family:var(--ff-mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;padding:.2rem .55rem;border-radius:2px;margin-top:.6rem}
+.badge-active{background:rgba(46,122,80,.18);color:var(--green);border:1px solid rgba(46,122,80,.3)}
+.badge-pursuing{background:rgba(200,148,42,.12);color:var(--accent);border:1px solid rgba(200,148,42,.25)}
+
+/* ── CASE STUDIES ── */
+.cases-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+.case-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:2rem;cursor:pointer;transition:all 280ms var(--ease);position:relative;overflow:hidden}
+.case-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);transform:scaleX(0);transition:transform 320ms var(--ease)}
+.case-card:hover{border-color:var(--border-mid);background:var(--surface-2);transform:translateY(-3px)}
+.case-card:hover::before{transform:scaleX(1)}
+.case-number{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:1rem}
+.case-title{font-family:var(--ff-display);font-size:1.5rem;font-weight:400;font-style:italic;color:var(--text);line-height:1.2;margin-bottom:.75rem}
+.case-desc{font-size:.95rem;color:var(--text-muted);margin-bottom:1.5rem;line-height:1.65}
+.case-tags{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:1.5rem}
+.tag{font-family:var(--ff-mono);font-size:.6rem;letter-spacing:.06em;text-transform:uppercase;padding:.25rem .6rem;border-radius:2px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--border)}
+.case-arrow{font-family:var(--ff-mono);font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);opacity:.7;transition:opacity 200ms,transform 200ms}
+.case-card:hover .case-arrow{opacity:1;transform:translateX(4px)}
+
+/* ── SKILLS ── */
+.skills-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:2rem}
+.skill-group{}
+.skill-group-label{font-family:var(--ff-mono);font-size:.65rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:.85rem;padding-bottom:.6rem;border-bottom:1px solid var(--border);opacity:.9}
+.skill-pills{display:flex;flex-wrap:wrap;gap:.4rem}
+.pill{font-family:var(--ff-mono);font-size:.62rem;padding:.28rem .65rem;border-radius:2px;background:var(--surface-2);color:var(--text-muted);border:1px solid var(--border);transition:all 200ms}
+.pill:hover{background:var(--accent-dim);color:var(--accent);border-color:var(--border-mid)}
+
+/* ── CONTACT ── */
+#contact-section{text-align:center}
+.contact-inner{max-width:600px;margin:0 auto}
+.contact-inner p{color:var(--text-muted);font-size:1.05rem;margin-bottom:2.5rem}
+.contact-email{font-family:var(--ff-mono);font-size:.85rem;letter-spacing:.05em;color:var(--accent);text-decoration:none;display:inline-block;padding:.9rem 2rem;border:1px solid var(--border-mid);border-radius:var(--r);transition:all 220ms var(--ease)}
+.contact-email:hover{background:var(--accent-dim);border-color:var(--accent)}
+
+/* ── FOOTER ── */
+footer{padding:2.5rem 3rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.footer-name{font-family:var(--ff-mono);font-size:.68rem;letter-spacing:.08em;color:var(--text-dim)}
+.footer-note{font-family:var(--ff-mono);font-size:.62rem;color:var(--text-dim);letter-spacing:.04em}
+
+/* ── MODAL ── */
+.modal-backdrop{position:fixed;inset:0;background:rgba(4,5,10,.85);backdrop-filter:blur(6px);z-index:200;opacity:0;pointer-events:none;transition:opacity 300ms var(--ease)}
+.modal-backdrop.open{opacity:1;pointer-events:all}
+.modal{position:fixed;top:0;right:0;height:100%;width:min(700px,100%);background:var(--surface);border-left:1px solid var(--border);z-index:201;overflow-y:auto;transform:translateX(100%);transition:transform 380ms var(--ease)}
+.modal.open{transform:translateX(0)}
+.modal-header{padding:2rem 2.5rem 1.5rem;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:5}
+.modal-close{position:absolute;top:1.5rem;right:1.75rem;background:none;border:none;color:var(--text-muted);cursor:pointer;font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;padding:.4rem .8rem;border-radius:var(--r);transition:all 200ms;border:1px solid transparent}
+.modal-close:hover{color:var(--accent);border-color:var(--border-mid)}
+.modal-label{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:.6rem;opacity:.9}
+.modal-title{font-family:var(--ff-display);font-size:1.75rem;font-weight:400;font-style:italic;color:var(--text);line-height:1.2}
+.modal-body{padding:2rem 2.5rem 3rem}
+.modal-body h3{font-family:var(--ff-display);font-size:1.15rem;font-weight:600;color:var(--text);margin:2rem 0 .75rem}
+.modal-body h3:first-child{margin-top:0}
+.modal-body p{color:var(--text-muted);font-size:.97rem;margin-bottom:1rem;line-height:1.75}
+.modal-body ul{color:var(--text-muted);font-size:.93rem;padding-left:1.25rem;margin-bottom:1.25rem}
+.modal-body ul li{margin-bottom:.4rem;line-height:1.65}
+.modal-code{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r);padding:1rem 1.25rem;font-family:var(--ff-mono);font-size:.73rem;line-height:1.8;color:#b8c0cc;overflow-x:auto;margin:1rem 0;white-space:pre}
+.finding{border-left:2px solid var(--border-mid);padding-left:1.25rem;margin:1.25rem 0}
+.finding-label{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);margin-bottom:.3rem}
+.finding-title{font-family:var(--ff-display);font-size:1.05rem;font-weight:600;color:var(--text);margin-bottom:.4rem}
+.finding-desc{color:var(--text-muted);font-size:.92rem;line-height:1.7}
+.modal-table{width:100%;border-collapse:collapse;font-size:.87rem;margin:1rem 0}
+.modal-table th{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);padding:.6rem .75rem;border-bottom:1px solid var(--border);text-align:left;opacity:.9}
+.modal-table td{padding:.65rem .75rem;border-bottom:1px solid var(--border);color:var(--text-muted);vertical-align:top}
+.modal-table tr:last-child td{border-bottom:none}
+.modal-skills{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:2rem;padding-top:1.5rem;border-top:1px solid var(--border)}
+.outcome-box{background:var(--accent-dim);border:1px solid var(--border-mid);border-radius:var(--r);padding:1.25rem 1.5rem;margin:1.5rem 0}
+.outcome-box p{color:var(--text);margin-bottom:0;font-size:.95rem}
+
+/* ── REVEAL ANIMATIONS ── */
+.reveal{opacity:0;transform:translateY(22px);transition:opacity 600ms var(--ease),transform 600ms var(--ease)}
+.reveal.visible{opacity:1;transform:none}
+.reveal-delay-1{transition-delay:80ms}
+.reveal-delay-2{transition-delay:160ms}
+.reveal-delay-3{transition-delay:240ms}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  nav{padding:1rem 1.5rem}
+  .nav-links{gap:1.5rem}
+  section{padding:5rem 1.5rem}
+  .hero-content{padding:0 1.5rem}
+  .about-grid,.cases-grid{grid-template-columns:1fr}
+  footer{padding:2rem 1.5rem}
+  .modal-body,.modal-header{padding:1.5rem}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="main-nav">
+  <a href="#hero" class="nav-name">GH &mdash; Security</a>
+  <ul class="nav-links">
+    <li><a href="#about">About</a></li>
+    <li><a href="#credentials">Credentials</a></li>
+    <li><a href="#work">Work</a></li>
+    <li><a href="#skills">Skills</a></li>
+    <li><a href="#contact-section">Contact</a></li>
+  </ul>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <canvas id="graph-canvas"></canvas>
+  <div class="hero-content">
+    <p class="hero-label">Security Analyst &amp; Systems Engineer</p>
+    <h1 class="hero-name">Guadalupe<br>Hernandez</h1>
+    <div class="hero-role">
+      <span>Microsoft 365 &amp; Entra ID</span>
+      <span style="color:var(--border-mid)">&#47;</span>
+      <span>Active Directory Security</span>
+      <span style="color:var(--border-mid)">&#47;</span>
+      <span>Incident Response</span>
+    </div>
+    <p class="hero-tagline">Attack paths mapped. Misconfigurations closed. Tenants protected.</p>
+    <div class="hero-cta">
+      <a href="#work" class="btn btn-primary">View Case Studies</a>
+      <a href="#contact-section" class="btn btn-ghost">Get In Touch</a>
+    </div>
+  </div>
+  <div class="hero-scroll"><div class="scroll-line"></div></div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ABOUT -->
+<section id="about">
+  <p class="section-eyebrow reveal">// 01</p>
+  <h2 class="section-heading reveal">About</h2>
+  <div class="about-grid">
+    <div class="about-text reveal">
+      <p>I&rsquo;m a systems engineer and security analyst with two-plus years at a managed service provider in the Pacific Northwest, supporting a portfolio of small and mid-sized businesses across <strong>Microsoft 365, Exchange Online, Entra ID, and Active Directory</strong>. My work spans multi-tenant security remediations, email threat analysis, compliance search and evidence preservation, and domain infrastructure hardening.</p>
+      <p>I approach every defensive engagement the way an adversary would: tracing the actual privilege path before assuming it doesn&rsquo;t exist. My OSCP preparation has made that orientation precise rather than instinctive &mdash; understanding an attack in depth is what makes the remediation surgical instead of performative.</p>
+      <p>I&rsquo;m currently completing a B.S. in Cybersecurity and pursuing OSCP certification, with a focus on Active Directory attack paths and offensive tooling applied to real-world defense.</p>
+    </div>
+    <div class="reveal reveal-delay-2" style="display:flex;flex-direction:column;gap:1rem">
+      <div class="about-stat">
+        <span class="stat-value">2+</span>
+        years at a managed service provider
+      </div>
+      <div class="about-stat">
+        <span class="stat-value">Multi-tenant</span>
+        M365, Exchange Online, Active Directory
+      </div>
+      <div class="about-stat">
+        <span class="stat-value">7</span>
+        industry certifications active
+      </div>
+      <div class="about-stat">
+        <span class="stat-value">Portland, OR</span>
+        Pacific Northwest &mdash; in-person available
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CREDENTIALS -->
+<section id="credentials">
+  <p class="section-eyebrow reveal">// 02</p>
+  <h2 class="section-heading reveal">Credentials</h2>
+  <div class="certs-grid">
+    <div class="cert-card reveal">
+      <div class="cert-issuer">CompTIA</div>
+      <div class="cert-name">Security+</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-1">
+      <div class="cert-issuer">CompTIA</div>
+      <div class="cert-name">CASP+</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-2">
+      <div class="cert-issuer">CompTIA</div>
+      <div class="cert-name">Network+</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-3">
+      <div class="cert-issuer">CompTIA</div>
+      <div class="cert-name">Linux+</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal">
+      <div class="cert-issuer">EC-Council</div>
+      <div class="cert-name">Certified Ethical Hacker (CEH)</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-1">
+      <div class="cert-issuer">AXELOS</div>
+      <div class="cert-name">ITIL Foundation</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-2">
+      <div class="cert-issuer">Microsoft</div>
+      <div class="cert-name">Certified: Hybrid Server Administrator</div>
+      <div><span class="cert-badge badge-active">Active</span></div>
+    </div>
+    <div class="cert-card reveal reveal-delay-3">
+      <div class="cert-issuer">Offensive Security</div>
+      <div class="cert-name">OSCP</div>
+      <div><span class="cert-badge badge-pursuing">In Progress</span></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CASE STUDIES -->
+<section id="work">
+  <p class="section-eyebrow reveal">// 03</p>
+  <h2 class="section-heading reveal">Case Studies</h2>
+  <p class="reveal" style="color:var(--text-muted);margin-top:-1.75rem;margin-bottom:2.5rem;max-width:600px;font-size:1rem">Lab-based methodology demonstrations. All work performed against purpose-built environments; real engagements are conducted under NDA.</p>
+  <div class="cases-grid">
+
+    <div class="case-card reveal" onclick="openModal('modal-1')">
+      <div class="case-number">Case Study 01</div>
+      <h3 class="case-title">Mapping the Invisible: AD Attack Path Analysis</h3>
+      <p class="case-desc">Using BloodHound CE and custom Cypher to transform a flat directory into a queryable graph of privilege paths &mdash; making invisible ACL chains, shadow admins, and delegation misconfigurations visible and measurable.</p>
+      <div class="case-tags">
+        <span class="tag">BloodHound CE</span>
+        <span class="tag">Cypher</span>
+        <span class="tag">bloodhound-python</span>
+        <span class="tag">PingCastle</span>
+        <span class="tag">Active Directory</span>
+      </div>
+      <div class="case-arrow">Read Case Study &rarr;</div>
+    </div>
+
+    <div class="case-card reveal reveal-delay-2" onclick="openModal('modal-2')">
+      <div class="case-number">Case Study 02</div>
+      <h3 class="case-title">Closing the Paths: AD Security Remediation</h3>
+      <p class="case-desc">The full engineering loop: root-cause analysis, targeted remediation for six misconfiguration classes (including gMSA migration, Tier 0 isolation, and ACL cleanup), and post-remediation verification via re-collection.</p>
+      <div class="case-tags">
+        <span class="tag">PowerShell</span>
+        <span class="tag">gMSA</span>
+        <span class="tag">Tier 0 Isolation</span>
+        <span class="tag">Protected Users</span>
+        <span class="tag">LAPS</span>
+      </div>
+      <div class="case-arrow">Read Case Study &rarr;</div>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- SKILLS -->
+<section id="skills">
+  <p class="section-eyebrow reveal">// 04</p>
+  <h2 class="section-heading reveal">Toolchain &amp; Skills</h2>
+  <div class="skills-grid">
+    <div class="skill-group reveal">
+      <div class="skill-group-label">Identity &amp; Access</div>
+      <div class="skill-pills">
+        <span class="pill">Active Directory</span>
+        <span class="pill">Entra ID</span>
+        <span class="pill">ADFS</span>
+        <span class="pill">gMSA / LAPS</span>
+        <span class="pill">BloodHound CE</span>
+        <span class="pill">SharpHound</span>
+        <span class="pill">bloodhound-python</span>
+        <span class="pill">PingCastle</span>
+        <span class="pill">AD ACL Scanner</span>
+      </div>
+    </div>
+    <div class="skill-group reveal reveal-delay-1">
+      <div class="skill-group-label">Microsoft 365 Security</div>
+      <div class="skill-pills">
+        <span class="pill">Exchange Online</span>
+        <span class="pill">Defender for M365</span>
+        <span class="pill">Transport Rules</span>
+        <span class="pill">Compliance Search</span>
+        <span class="pill">DMARC / DKIM / SPF</span>
+        <span class="pill">Conditional Access</span>
+        <span class="pill">Microsoft Intune MDM</span>
+        <span class="pill">CIS Benchmarks</span>
+      </div>
+    </div>
+    <div class="skill-group reveal reveal-delay-2">
+      <div class="skill-group-label">Offensive &amp; Assessment</div>
+      <div class="skill-pills">
+        <span class="pill">CrackMapExec / NetExec</span>
+        <span class="pill">Impacket</span>
+        <span class="pill">Evil-WinRM</span>
+        <span class="pill">Metasploit</span>
+        <span class="pill">Burp Suite</span>
+        <span class="pill">Nmap / Nessus</span>
+        <span class="pill">Cypher queries</span>
+      </div>
+    </div>
+    <div class="skill-group reveal reveal-delay-3">
+      <div class="skill-group-label">Incident Response &amp; Forensics</div>
+      <div class="skill-pills">
+        <span class="pill">Email Header / MIME Analysis</span>
+        <span class="pill">SoftDelete Purge</span>
+        <span class="pill">Forensic Report Writing</span>
+        <span class="pill">Phishing Triage</span>
+        <span class="pill">Chain of Custody</span>
+        <span class="pill">Exchange Online PS</span>
+      </div>
+    </div>
+    <div class="skill-group reveal">
+      <div class="skill-group-label">Platforms &amp; Infrastructure</div>
+      <div class="skill-pills">
+        <span class="pill">Windows Server</span>
+        <span class="pill">Linux (RHEL / Debian)</span>
+        <span class="pill">Azure (Entra / AVD)</span>
+        <span class="pill">DNS / Squarespace / Hostway</span>
+        <span class="pill">Google Workspace</span>
+        <span class="pill">PowerShell</span>
+        <span class="pill">Bash</span>
+      </div>
+    </div>
+    <div class="skill-group reveal reveal-delay-1">
+      <div class="skill-group-label">Frameworks</div>
+      <div class="skill-pills">
+        <span class="pill">MITRE ATT&CK</span>
+        <span class="pill">Zero Trust</span>
+        <span class="pill">CIS Controls</span>
+        <span class="pill">NIST CSF</span>
+        <span class="pill">ITIL</span>
+        <span class="pill">Tier 0 / PAW Model</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- CONTACT -->
+<section id="contact-section">
+  <div class="contact-inner">
+    <p class="section-eyebrow reveal" style="text-align:center">// 05</p>
+    <h2 class="section-heading reveal" style="text-align:center">Get In Touch</h2>
+    <p class="reveal">I&rsquo;m open to security analyst roles and MSP security engagements in the Portland / Vancouver metro area and remote.</p>
+    <a href="mailto:your@email.com" class="contact-email reveal reveal-delay-1">your@email.com</a>
+    <div class="reveal reveal-delay-2" style="margin-top:1.5rem;font-family:var(--ff-mono);font-size:.65rem;letter-spacing:.08em;color:var(--text-dim);text-transform:uppercase">Portland, Oregon &nbsp;&bull;&nbsp; Available In-Person</div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <span class="footer-name">Guadalupe Hernandez &mdash; Security Analyst</span>
+  <span class="footer-note">Built as a portfolio demonstration &mdash; 2026</span>
+</footer>
+
+
+<!-- ── MODAL BACKDROP ── -->
+<div class="modal-backdrop" id="modal-backdrop" onclick="closeAllModals()"></div>
+
+<!-- ── MODAL: CASE STUDY 01 ── -->
+<div class="modal" id="modal-1">
+  <div class="modal-header">
+    <div class="modal-label">Case Study 01 &mdash; Lab Demonstration</div>
+    <h2 class="modal-title">Mapping the Invisible: AD Attack Path Analysis</h2>
+    <button class="modal-close" onclick="closeAllModals()">Close &times;</button>
+  </div>
+  <div class="modal-body">
+
+    <h3>Summary</h3>
+    <p>Most Active Directory compromises exploit configuration, not software vulnerabilities. This case study walks through using attack path mapping to make invisible privilege relationships visible: collecting a graph of a representative domain, querying it for the misconfigurations attackers rely on, and turning flat object lists into a prioritized map of who can reach Tier 0 and how.</p>
+
+    <h3>Toolchain</h3>
+    <table class="modal-table">
+      <tr><th>Tool</th><th>Role</th></tr>
+      <tr><td>BloodHound CE + Neo4j</td><td>Graph database and analysis UI</td></tr>
+      <tr><td>SharpHound</td><td>On-host Windows collector</td></tr>
+      <tr><td>bloodhound-python</td><td>Remote Linux-based collection &mdash; no binary dropped</td></tr>
+      <tr><td>PingCastle</td><td>Domain risk scoring for executive reporting</td></tr>
+      <tr><td>Custom Cypher</td><td>Targeted hunting beyond built-in queries</td></tr>
+    </table>
+
+    <h3>Methodology</h3>
+    <p>Collection was run remotely from a Linux host using <code style="font-family:var(--ff-mono);font-size:.82em;color:var(--accent)">bloodhound-python</code> with <code style="font-family:var(--ff-mono);font-size:.82em;color:var(--accent)">-c All</code> to capture ACLs and session data. Results were ingested into Neo4j and analyzed in three passes: built-in queries, custom Cypher, and shortest-path analysis to quantify exposure. Session data was collected during business hours to capture active privileged sessions.</p>
+
+    <h3>Findings</h3>
+
+    <div class="finding">
+      <div class="finding-label">Finding 01</div>
+      <div class="finding-title">ACL-based privilege escalation chains</div>
+      <div class="finding-desc">The HelpDesk group held GenericAll over a Server Admins member, which held WriteDacl on Domain Admins. Invisible across three separate admin screens; one shortest-path query made the chain explicit.</div>
+<div class="modal-code">MATCH p=shortestPath((n)-[*1..]->(g:Group))
+WHERE g.objectid ENDS WITH '-512'
+RETURN p</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 02</div>
+      <div class="finding-title">Shadow admins via dangerous ACL edges</div>
+      <div class="finding-desc">A former contractor account held ForceChangePassword over a privileged service account. No group membership, no visible privilege in the org chart &mdash; only visible in the graph.</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 03</div>
+      <div class="finding-title">DCSync rights on non-DC principals</div>
+      <div class="finding-desc">An Azure AD Connect sync account carried broader replication rights than required, plus a secondary orphaned account from a failed troubleshooting session retained GetChanges and GetChangesAll.</div>
+<div class="modal-code">MATCH p=(n)-[:DCSync|GetChanges|GetChangesAll]->(d:Domain)
+WHERE NOT n.objectid ENDS WITH '-516'
+RETURN n.name, labels(n)</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 04</div>
+      <div class="finding-title">Kerberoastable accounts on privileged paths</div>
+      <div class="finding-desc">Three service accounts with SPNs were cross-referenced against their outbound paths. Two sat on a path to Domain Admins, elevating them from low-priority noise to critical findings.</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 05</div>
+      <div class="finding-title">Unconstrained delegation on non-DC host</div>
+      <div class="finding-desc">A legacy application server retained unconstrained delegation from a migration five years prior. The application was gone; the flag was not.</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 06</div>
+      <div class="finding-title">Privileged sessions on non-Tier-0 workstations</div>
+      <div class="finding-desc">Domain Admins were logging into standard helpdesk workstations. Session data revealed active credential exposure on machines not managed to Tier 0 standards.</div>
+    </div>
+
+    <h3>Outcome</h3>
+    <div class="outcome-box">
+      <p>A meaningful percentage of ordinary domain users held a path to Domain Admin through permission chains no administrator had ever intentionally created. Every path was a configuration decision &mdash; not a patch-level vulnerability &mdash; which means every one is fixable without purchasing additional tooling.</p>
+    </div>
+
+    <div class="modal-skills">
+      <span class="tag">BloodHound CE</span>
+      <span class="tag">Cypher</span>
+      <span class="tag">bloodhound-python</span>
+      <span class="tag">PingCastle</span>
+      <span class="tag">AD ACL Analysis</span>
+      <span class="tag">Tier 0 Modeling</span>
+      <span class="tag">Multi-tenant MSP</span>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── MODAL: CASE STUDY 02 ── -->
+<div class="modal" id="modal-2">
+  <div class="modal-header">
+    <div class="modal-label">Case Study 02 &mdash; Lab Demonstration</div>
+    <h2 class="modal-title">Closing the Paths: AD Security Remediation</h2>
+    <button class="modal-close" onclick="closeAllModals()">Close &times;</button>
+  </div>
+  <div class="modal-body">
+
+    <h3>Summary</h3>
+    <p>Attack path mapping shows where an adversary can go. This case study covers the full engineering loop: root-cause analysis for each misconfiguration class, targeted remediation with specific tooling, and post-remediation verification via re-collection that confirms the paths are genuinely closed &mdash; not just changed.</p>
+
+    <h3>Principle</h3>
+    <p>Remediation is a prioritization exercise driven by path criticality, not a flat checklist. Shortest, highest-value paths to Tier 0 are closed first. Every change is tested for functional impact before and after, and re-collection confirms the structural closure. Over-remediation without testing creates rollback pressure &mdash; the enemy of permanent fixes.</p>
+
+    <h3>Remediation by Finding Class</h3>
+
+    <div class="finding">
+      <div class="finding-label">Finding 01 &mdash; ACL chains</div>
+      <div class="finding-title">Restore inheritance; remove non-default ACEs</div>
+      <div class="finding-desc">Non-inherited ACEs were documented via AD ACL Scanner, then removed using PowerShell&rsquo;s AD: drive. Where inheritance was broken to enable the over-permissioned ACE, restoring inheritance propagated cleanup automatically.</div>
+<div class="modal-code">$acl = Get-Acl "AD:CN=Server Admins,OU=Groups,DC=lab,DC=corp,DC=local"
+$ace = $acl.Access | Where-Object {
+    $_.IdentityReference -eq 'LAB\HelpDesk' -and
+    $_.ActiveDirectoryRights -eq 'GenericAll' }
+$acl.RemoveAccessRule($ace)
+Set-Acl -Path "AD:CN=Server Admins,..." -AclObject $acl</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 02 &mdash; Shadow admins</div>
+      <div class="finding-title">Strip memberships from stale accounts; remove ACEs</div>
+      <div class="finding-desc">Disabled accounts with dangerous outbound edges are never operationally justified. Group memberships and ACEs were stripped; accounts flagged for deletion through change control.</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 03 &mdash; DCSync rights</div>
+      <div class="finding-title">Revoke replication rights from non-DC principals</div>
+      <div class="finding-desc">Used dsacls.exe to remove GetChanges / GetChangesAll from the orphaned troubleshooting account entirely. The primary sync account was scoped to minimum required rights based on the actual sync configuration in use.</div>
+<div class="modal-code">dsacls "DC=lab,DC=corp,DC=local" /R "LAB\stale_sync_account"</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 04 &mdash; Kerberoastable accounts</div>
+      <div class="finding-title">Migrate to gMSA; rotate remaining service account credentials</div>
+      <div class="finding-desc">Group Managed Service Accounts rotate their own 240-character passwords automatically, eliminating the offline-cracking surface entirely. For accounts that could not be migrated immediately, credentials were rotated to a 30+ character random value and SPNs were scoped to minimum required.</div>
+<div class="modal-code">New-ADServiceAccount -Name "gMSA_AppService" `
+  -DNSHostName "appservice.lab.corp.local" `
+  -PrincipalsAllowedToRetrieveManagedPassword "AppServers_Hosts"
+
+Set-ADUser -Identity "svc_appservice" `
+  -ServicePrincipalNames @{Remove="HTTP/appservice.lab.corp.local"}</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 05 &mdash; Unconstrained delegation</div>
+      <div class="finding-title">Remove or convert to constrained / RBCD</div>
+      <div class="finding-desc">Unconstrained delegation removed from the legacy host. All Tier 0 accounts were added to the Protected Users group and flagged as &ldquo;sensitive and cannot be delegated.&rdquo;</div>
+<div class="modal-code">Set-ADComputer -Identity "LEGACYAPP01" -TrustedForDelegation $false
+Set-ADAccountControl -Identity "DA_account" -AccountNotDelegated $true
+Add-ADGroupMember -Identity "Protected Users" -Members "DA_account"</div>
+    </div>
+
+    <div class="finding">
+      <div class="finding-label">Finding 06 &mdash; Privileged sessions</div>
+      <div class="finding-title">Tier 0 isolation via GPO and PAW model</div>
+      <div class="finding-desc">A Group Policy Object applied &ldquo;Deny log on locally&rdquo; and &ldquo;Deny access from the network&rdquo; for Domain Admins to all OUs except the Tier 0 PAW OU. Domain Admins may initiate interactive sessions only from the dedicated, hardened workstation. Credential Guard enabled across all domain-joined endpoints as an interim control.</div>
+    </div>
+
+    <h3>Before / After</h3>
+    <table class="modal-table">
+      <tr><th>Metric</th><th>Baseline</th><th>Post-Remediation</th></tr>
+      <tr><td>Users with path to Domain Admins</td><td>Documented count</td><td>0 direct; documented approved delegation only</td></tr>
+      <tr><td>Shadow admin ACEs (non-default)</td><td>Documented count</td><td>0 unjustified</td></tr>
+      <tr><td>DCSync rights (non-DC principals)</td><td>2</td><td>0</td></tr>
+      <tr><td>Kerberoastable on privileged paths</td><td>2</td><td>0 (gMSA migrated)</td></tr>
+      <tr><td>Unconstrained delegation (non-DC)</td><td>1</td><td>0</td></tr>
+      <tr><td>PingCastle risk score</td><td>Baseline</td><td>Post-remediation (delta documented)</td></tr>
+    </table>
+
+    <h3>Verification</h3>
+    <p>Post-remediation SharpHound collection was run immediately after changes and again 48 hours later to catch any permission re-propagation via AdminSDHolder. The user-path-to-DA Cypher query returned zero for direct paths. PingCastle score was re-run to provide a trending metric for client reporting.</p>
+
+    <h3>Sustainability</h3>
+    <p>For multi-tenant MSP environments: scheduled monthly re-collection, a templated hardening GPO baseline applied to all newly onboarded tenants, and quarterly AdminSDHolder audits to prevent the single-misconfiguration-that-multiplies failure mode.</p>
+
+    <div class="modal-skills">
+      <span class="tag">PowerShell AD Module</span>
+      <span class="tag">gMSA Migration</span>
+      <span class="tag">dsacls</span>
+      <span class="tag">AD ACL Scanner</span>
+      <span class="tag">Tier 0 / PAW</span>
+      <span class="tag">Protected Users</span>
+      <span class="tag">BloodHound Verification</span>
+      <span class="tag">PingCastle</span>
+    </div>
+  </div>
+</div>
+
+
+<script>
+// ── GRAPH CANVAS ──
+const canvas = document.getElementById('graph-canvas');
+const ctx = canvas.getContext('2d');
+let nodes = [], activePath = null, activeTimer = 0, frame = 0;
+const RGB = '200,148,42';
+
+function resize() {
+  canvas.width = canvas.offsetWidth;
+  canvas.height = canvas.offsetHeight;
+  initNodes();
+}
+
+function initNodes() {
+  const count = Math.min(65, Math.max(30, Math.floor(canvas.width * canvas.height / 14000)));
+  nodes = Array.from({length: count}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    vx: (Math.random() - .5) * .35,
+    vy: (Math.random() - .5) * .35,
+    r: Math.random() * 1.8 + 1.2,
+    active: false
+  }));
+}
+
+function triggerPath() {
+  const start = Math.floor(Math.random() * nodes.length);
+  const path = [start];
+  for (let s = 0; s < 4; s++) {
+    const cur = nodes[path[path.length - 1]];
+    let best = null, bestD = 150;
+    nodes.forEach((n, i) => {
+      if (path.includes(i)) return;
+      const d = Math.hypot(n.x - cur.x, n.y - cur.y);
+      if (d < bestD) { bestD = d; best = i; }
+    });
+    if (best !== null) path.push(best); else break;
+  }
+  if (path.length >= 2) { activePath = path; activeTimer = 100; }
+}
+
+function tick() {
+  const W = canvas.width, H = canvas.height;
+  nodes.forEach(n => {
+    n.x += n.vx; n.y += n.vy;
+    if (n.x < 0 || n.x > W) n.vx *= -1;
+    if (n.y < 0 || n.y > H) n.vy *= -1;
+    n.active = false;
+  });
+  frame++;
+  if (frame % 280 === 0) triggerPath();
+  if (activeTimer > 0) {
+    activeTimer--;
+    activePath && activePath.forEach(i => { if (nodes[i]) nodes[i].active = true; });
+    if (activeTimer <= 0) activePath = null;
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const D = 115, fade = activeTimer / 100;
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      if (d > D) continue;
+      const ai = activePath && activePath.includes(i) && activePath.includes(j) &&
+        Math.abs(activePath.indexOf(i) - activePath.indexOf(j)) === 1;
+      ctx.strokeStyle = ai
+        ? `rgba(${RGB},${.55 * fade})`
+        : `rgba(${RGB},${(1 - d / D) * .06})`;
+      ctx.lineWidth = ai ? .9 : .45;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+  }
+  nodes.forEach(n => {
+    if (n.active && fade > 0) {
+      const g = ctx.createRadialGradient(n.x, n.y, 0, n.x, n.y, 10);
+      g.addColorStop(0, `rgba(${RGB},${.18 * fade})`);
+      g.addColorStop(1, `rgba(${RGB},0)`);
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(n.x, n.y, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = `rgba(${RGB},${.75 * fade})`;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r * 1.6, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = `rgba(${RGB},0.22)`;
+      ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fill();
+    }
+  });
+}
+
+function loop() { tick(); draw(); requestAnimationFrame(loop); }
+resize();
+window.addEventListener('resize', resize);
+loop();
+
+// ── NAV SCROLL ──
+const nav = document.getElementById('main-nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 60);
+}, {passive: true});
+
+// ── REVEAL ON SCROLL ──
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+}, {threshold: .12});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+// ── MODAL ──
+const backdrop = document.getElementById('modal-backdrop');
+function openModal(id) {
+  backdrop.classList.add('open');
+  document.getElementById(id).classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function closeAllModals() {
+  backdrop.classList.remove('open');
+  document.querySelectorAll('.modal').forEach(m => m.classList.remove('open'));
+  document.body.style.overflow = '';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAllModals(); });
+</script>
+</body>
+</html>
