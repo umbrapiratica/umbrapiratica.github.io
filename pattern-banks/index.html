@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pattern Banks &mdash; Guadalupe Hernandez</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#07080d;--surface:#0b0e18;--surface-2:#101422;--accent:#c8942a;--accent-dim:rgba(200,148,42,0.09);--accent-mid:rgba(200,148,42,0.22);--red:#b84035;--green:#2e7a50;--text:#e0dbd3;--text-muted:#686c82;--text-dim:#3e4158;--border:rgba(200,148,42,0.11);--border-mid:rgba(200,148,42,0.28);--ff-display:'Crimson Pro',Georgia,serif;--ff-mono:'JetBrains Mono','Fira Code',monospace;--ease:cubic-bezier(.4,0,.2,1);--r:4px;}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:var(--ff-display);font-size:1.05rem;line-height:1.75;overflow-x:hidden;min-height:100vh}
+nav{position:fixed;top:0;left:0;right:0;z-index:100;padding:1.25rem 3rem;display:flex;align-items:center;justify-content:space-between;transition:background 400ms var(--ease)}
+nav.scrolled{background:rgba(7,8,13,0.88);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.nav-name{font-family:var(--ff-mono);font-size:.75rem;letter-spacing:.08em;color:var(--accent);text-decoration:none;opacity:.85}
+.nav-links{display:flex;gap:2.5rem;list-style:none;align-items:center}
+.nav-links a{font-family:var(--ff-mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--text-muted);text-decoration:none;transition:color 200ms}
+.nav-links a:hover{color:var(--accent)}
+.page-hero{padding:9rem 3rem 5rem;max-width:1100px;margin:0 auto;border-bottom:1px solid var(--border)}
+.hero-eyebrow{font-family:var(--ff-mono);font-size:.68rem;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:1rem;opacity:.9}
+.hero-title{font-family:var(--ff-display);font-size:clamp(2.5rem,5vw,4rem);font-weight:300;font-style:italic;line-height:1.05;color:var(--text);margin-bottom:1.25rem}
+.hero-sub{font-family:var(--ff-display);font-size:1.1rem;font-weight:300;color:var(--text-muted);max-width:580px;line-height:1.7;border-left:2px solid var(--accent);padding-left:1.25rem;font-style:italic}
+.toc-nav{padding:2.5rem 3rem 0;max-width:1100px;margin:0 auto}
+.toc-nav-label{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:.85rem}
+.toc-pills{display:flex;flex-wrap:wrap;gap:.4rem}
+.toc-pill{font-family:var(--ff-mono);font-size:.62rem;letter-spacing:.06em;text-transform:uppercase;padding:.3rem .75rem;border-radius:2px;background:var(--surface);color:var(--text-muted);border:1px solid var(--border);text-decoration:none;transition:all 200ms}
+.toc-pill:hover{background:var(--accent-dim);color:var(--accent);border-color:var(--border-mid)}
+.banks-section{padding:3rem 3rem 7rem;max-width:1100px;margin:0 auto}
+.banks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1.5rem}
+.bank-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:2rem;text-decoration:none;color:inherit;display:block;transition:all 280ms var(--ease);position:relative;overflow:hidden}
+.bank-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--accent),transparent);transform:scaleX(0);transition:transform 320ms var(--ease)}
+.bank-card:hover{border-color:var(--border-mid);background:var(--surface-2);transform:translateY(-3px)}
+.bank-card:hover::before{transform:scaleX(1)}
+.card-index{font-family:var(--ff-mono);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;color:var(--text-dim);margin-bottom:.85rem}
+.card-mono{font-family:var(--ff-mono);font-size:.72rem;letter-spacing:.06em;color:var(--accent);margin-bottom:.5rem;opacity:.85}
+.card-title{font-family:var(--ff-display);font-size:1.45rem;font-weight:400;font-style:italic;color:var(--text);line-height:1.2;margin-bottom:.75rem}
+.card-desc{font-size:.93rem;color:var(--text-muted);line-height:1.65;margin-bottom:1.5rem}
+.card-tags{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:1.5rem}
+.tag{font-family:var(--ff-mono);font-size:.58rem;letter-spacing:.06em;text-transform:uppercase;padding:.22rem .55rem;border-radius:2px;background:var(--accent-dim);color:var(--accent);border:1px solid var(--border)}
+.card-arrow{font-family:var(--ff-mono);font-size:.65rem;letter-spacing:.1em;text-transform:uppercase;color:var(--accent);opacity:.65;transition:opacity 200ms,transform 200ms;display:inline-block}
+.bank-card:hover .card-arrow{opacity:1;transform:translateX(4px)}
+footer{padding:2.5rem 3rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+.footer-name{font-family:var(--ff-mono);font-size:.68rem;letter-spacing:.08em;color:var(--text-dim)}
+.footer-note{font-family:var(--ff-mono);font-size:.62rem;color:var(--text-dim);letter-spacing:.04em}
+.reveal{opacity:0;transform:translateY(18px);transition:opacity 550ms var(--ease),transform 550ms var(--ease)}
+.reveal.visible{opacity:1;transform:none}
+.reveal-delay-1{transition-delay:60ms}.reveal-delay-2{transition-delay:120ms}.reveal-delay-3{transition-delay:180ms}.reveal-delay-4{transition-delay:240ms}.reveal-delay-5{transition-delay:300ms}.reveal-delay-6{transition-delay:360ms}
+@media(max-width:768px){nav{padding:1rem 1.5rem}.nav-links{gap:1.5rem}.page-hero{padding:7rem 1.5rem 3.5rem}.toc-nav,.banks-section{padding-left:1.5rem;padding-right:1.5rem}.banks-grid{grid-template-columns:1fr}footer{padding:2rem 1.5rem}}
+</style>
+</head>
+<body>
+<nav id="main-nav">
+  <a href="../index.html" class="nav-name">GH &mdash; Security</a>
+  <ul class="nav-links">
+    <li><a href="../index.html#about">About</a></li>
+    <li><a href="../index.html#credentials">Credentials</a></li>
+    <li><a href="../index.html#work">Work</a></li>
+    <li><a href="../index.html#skills">Skills</a></li>
+    <li><a href="../index.html#contact-section">Contact</a></li>
+  </ul>
+</nav>
+<div class="page-hero">
+  <p class="hero-eyebrow reveal">// Pattern Banks</p>
+  <h1 class="hero-title reveal">OSCP Pattern<br>Bank Reference</h1>
+  <p class="hero-sub reveal">Structured attack methodology references built during OSCP preparation. Each bank covers a distinct phase of a penetration test &mdash; from initial enumeration to privilege escalation and lateral movement.</p>
+</div>
+<div class="toc-nav">
+  <div class="toc-nav-label reveal">Jump to</div>
+  <div class="toc-pills reveal">
+    <a href="#foothold" class="toc-pill">Foothold</a>
+    <a href="#ad-enum" class="toc-pill">AD Enumeration</a>
+    <a href="#ad-privesc" class="toc-pill">AD PrivEsc</a>
+    <a href="#ad-pivot" class="toc-pill">AD Pivot</a>
+    <a href="#win-privesc" class="toc-pill">Windows PrivEsc</a>
+    <a href="#linux-privesc" class="toc-pill">Linux PrivEsc</a>
+    <a href="#standalone" class="toc-pill">Standalone</a>
+  </div>
+</div>
+<div class="banks-section">
+  <div class="banks-grid">
+    <a href="./foothold-pattern-bank.html" class="bank-card reveal" id="foothold">
+      <div class="card-index">Pattern Bank 01</div>
+      <div class="card-mono">FOOTHOLD_PATTERN_BANK</div>
+      <h2 class="card-title">Service Enumeration &amp; Initial Foothold</h2>
+      <p class="card-desc">Service fingerprinting methodology leading to first shell. Covers port enumeration, protocol-specific probing, web application entry points, and common exploit patterns for initial access.</p>
+      <div class="card-tags"><span class="tag">Nmap</span><span class="tag">Web Enum</span><span class="tag">Service Exploits</span><span class="tag">First Shell</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./ad-enum-pattern-bank.html" class="bank-card reveal reveal-delay-1" id="ad-enum">
+      <div class="card-index">Pattern Bank 02</div>
+      <div class="card-mono">ENUM_PATTERN_BANK</div>
+      <h2 class="card-title">Active Directory Enumeration</h2>
+      <p class="card-desc">Systematic AD reconnaissance methodology. BloodHound collection strategies, LDAP queries, trust relationship mapping, and building a complete picture of privilege paths before exploitation.</p>
+      <div class="card-tags"><span class="tag">BloodHound</span><span class="tag">LDAP</span><span class="tag">Trust Enum</span><span class="tag">ACL Analysis</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./ad-privesc-pattern-bank.html" class="bank-card reveal reveal-delay-2" id="ad-privesc">
+      <div class="card-index">Pattern Bank 03</div>
+      <div class="card-mono">PRIVESC_PATTERN_BANK // AD</div>
+      <h2 class="card-title">Active Directory Privilege Escalation</h2>
+      <p class="card-desc">Escalation paths from domain user to Domain Admin. ACL abuse chains, Kerberos attacks (Kerberoasting, AS-REP roasting, delegation exploits), and misconfiguration-based elevation.</p>
+      <div class="card-tags"><span class="tag">Kerberoast</span><span class="tag">AS-REP Roast</span><span class="tag">ACL Abuse</span><span class="tag">Delegation</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./ad-pivot-pattern-bank.html" class="bank-card reveal reveal-delay-3" id="ad-pivot">
+      <div class="card-index">Pattern Bank 04</div>
+      <div class="card-mono">PIVOT_PATTERN_BANK</div>
+      <h2 class="card-title">Network Pivoting &amp; AD Lateral Movement</h2>
+      <p class="card-desc">Moving through segmented networks and AD environments. Port forwarding, SOCKS proxying, pass-the-hash, pass-the-ticket, DCOM, WMI-based lateral movement.</p>
+      <div class="card-tags"><span class="tag">Chisel</span><span class="tag">Pass-the-Hash</span><span class="tag">Pass-the-Ticket</span><span class="tag">SOCKS Proxy</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./windows-privesc-pattern-bank.html" class="bank-card reveal reveal-delay-4" id="win-privesc">
+      <div class="card-index">Pattern Bank 05</div>
+      <div class="card-mono">WINDOWS_PRIVESC_PATTERN_BANK</div>
+      <h2 class="card-title">Windows Local Privilege Escalation</h2>
+      <p class="card-desc">PG-grounded escalation patterns from low-privileged user to SYSTEM. Service misconfigurations, token privilege abuse, UAC bypass, registry-based vectors, and unquoted service paths.</p>
+      <div class="card-tags"><span class="tag">SeImpersonate</span><span class="tag">Service Abuse</span><span class="tag">Token Abuse</span><span class="tag">UAC Bypass</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./linux-privesc-pattern-bank.html" class="bank-card reveal reveal-delay-5" id="linux-privesc">
+      <div class="card-index">Pattern Bank 06</div>
+      <div class="card-mono">LINUX_PRIVESC_PATTERN_BANK</div>
+      <h2 class="card-title">Linux Local Privilege Escalation</h2>
+      <p class="card-desc">PG-grounded escalation patterns from low-privileged user to root. SUID binary abuse, cron job hijacking, capabilities exploitation, writable paths in root-owned processes, and sudo misconfigurations.</p>
+      <div class="card-tags"><span class="tag">SUID Abuse</span><span class="tag">Sudo Misconfig</span><span class="tag">Cron Hijack</span><span class="tag">Capabilities</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+    <a href="./standalone-pattern-bank.html" class="bank-card reveal reveal-delay-6" id="standalone">
+      <div class="card-index">Pattern Bank 07</div>
+      <div class="card-mono">STANDALONE_PATTERN_BANK</div>
+      <h2 class="card-title">Standalone Exploitation Patterns</h2>
+      <p class="card-desc">Web, Linux, and Windows standalone exploitation patterns. Client-side attacks, file inclusion, command injection, and common vulnerability classes encountered in isolated target environments.</p>
+      <div class="card-tags"><span class="tag">Web Exploits</span><span class="tag">File Inclusion</span><span class="tag">Command Injection</span><span class="tag">Client-Side</span></div>
+      <span class="card-arrow">Open Pattern Bank &rarr;</span>
+    </a>
+  </div>
+</div>
+<footer>
+  <span class="footer-name">Guadalupe Hernandez &mdash; Security Analyst</span>
+  <span class="footer-note"><a href="../index.html" style="color:var(--text-dim);text-decoration:none;">← Back to portfolio</a></span>
+</footer>
+<script>
+const nav = document.getElementById('main-nav');
+window.addEventListener('scroll', () => { nav.classList.toggle('scrolled', window.scrollY > 60); }, {passive: true});
+const io = new IntersectionObserver(entries => { entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }); }, {threshold: .1});
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+</script>
+</body>
+</html>
