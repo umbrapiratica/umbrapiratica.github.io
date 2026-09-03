@@ -10,11 +10,19 @@
     The script runs in two phases:
        INVESTIGATE  (default, read-only)  -> collects evidence for the CS-#### case folder
                                              and prints a TRIAGE SUMMARY (also TRIAGE_SUMMARY.txt)
-       REMEDIATE    (-Remediate switch)   -> resets the password twice (final password
-                                             printed to the terminal) and revokes all
-                                             sessions / signs the user out everywhere.
-                                             Forwarding and inbox rules are NOT changed;
-                                             they are reported in the triage summary.
+       REMEDIATE    (-Remediate switch)   -> runs AFTER the triage summary so the
+                                             operator decides with the evidence on
+                                             screen. Prints a full dry-run plan first,
+                                             then: resets the password twice (final
+                                             password printed to the terminal), revokes
+                                             all sessions / signs the user out
+                                             everywhere, and PROMPTS yes/no to reset
+                                             MFA methods and to wipe Entra registered
+                                             devices. Forwarding and inbox rules are
+                                             never changed - they are reported for
+                                             manual handling.
+                                             -WhatIf prints the plan and executes
+                                             nothing.
 
     Every containment action honors -WhatIf / -Confirm (SupportsShouldProcess).
     Evidence collection and packaging deliberately opt OUT of -WhatIf so that a
@@ -141,6 +149,35 @@
     everywhere). It does NOT clear forwarding or disable inbox rules - those
     are listed in the triage summary for manual handling.
 
+.PARAMETER ResetMfaMethods
+    Pre-answer YES to the "delete all registered MFA methods" prompt. Deletes
+    every non-password authentication method (Authenticator, phone, FIDO2,
+    software OATH, Windows Hello, TAP, ...) via Graph, forcing the user to
+    re-register MFA. Without this switch the operator is asked yes/no at the
+    console. Requires UserAuthenticationMethod.ReadWrite.All, which is only
+    requested when -Remediate is set.
+
+.PARAMETER RemoveRegisteredDevices / AllRegisteredDevices
+    Pre-answer YES to the "delete Entra device objects" prompt. This
+    DEREGISTERS the device from Entra - it is NOT an Intune remote wipe and
+    does not erase the physical machine. By default only devices registered
+    inside the compromise window are offered; -AllRegisteredDevices widens the
+    scope to every registered device. Requires Device.ReadWrite.All, only
+    requested when -Remediate is set.
+
+.EXAMPLE
+    # Dry run: full investigation + a printed plan of every containment action, nothing executed.
+    .\Invoke-CompromisedMailboxIR.ps1 -TenantId 'clienttenant.onmicrosoft.com' `
+        -UserPrincipalName 'user@clientdomain.com' -AdminUpn 'you@yourmsp.com' `
+        -IssueId 'CS-1234' -Remediate -WhatIf
+
+.EXAMPLE
+    # Full containment, unattended: no yes/no prompts, MFA reset and in-window
+    # devices removed automatically.
+    .\Invoke-CompromisedMailboxIR.ps1 -TenantId 'clienttenant.onmicrosoft.com' `
+        -UserPrincipalName 'user@clientdomain.com' -IssueId 'CS-1234' `
+        -Remediate -ResetMfaMethods -RemoveRegisteredDevices -SkipTenantConfirm
+
 .EXAMPLE
     .\Invoke-CompromisedMailboxIR.ps1 -TenantId 'clienttenant.onmicrosoft.com' `
         -UserPrincipalName 'user@clientdomain.com' -AdminUpn 'you@yourmsp.com' `
@@ -148,7 +185,11 @@
         -CompromiseEnd '2026-09-02 23:59' -KeepConnected
 #>
 
-[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High')]
+# ConfirmImpact is deliberately 'Medium', NOT 'High': with the default
+# $ConfirmPreference of 'High' that keeps ShouldProcess from raising its own
+# [Y/A/N/L/S] prompt on top of the explicit yes/no gates below, while -WhatIf
+# and an explicit -Confirm both still work exactly as normal.
+[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
 param(
     [Parameter(Mandatory)] [string]   $TenantId,
     [Parameter(Mandatory)] [string]   $UserPrincipalName,
@@ -173,7 +214,16 @@ param(
     [switch]   $PartnerDelegated,
     [switch]   $Remediate,
     [switch]   $BlockSignIn,
-    [switch]   $EmitTempPasswordFile
+    [switch]   $EmitTempPasswordFile,
+
+    # Pre-answer the interactive yes/no prompts in the REMEDIATE phase.
+    # Without these the operator is asked at the console; with them the
+    # answer is YES and no prompt is shown (use for unattended runs).
+    [switch]   $ResetMfaMethods,
+    [switch]   $RemoveRegisteredDevices,
+    # By default only devices REGISTERED IN THE COMPROMISE WINDOW are offered
+    # for deletion. This widens the offer to every registered device.
+    [switch]   $AllRegisteredDevices
 )
 
 # ---------------------------------------------------------------------------
@@ -190,7 +240,7 @@ function Start-IRTranscript {
     try { Start-Transcript -Path $script:transcript -Append -WhatIf:$false | Out-Null }
     catch { Write-Host "  (transcript could not start: $($_.Exception.Message))" -ForegroundColor DarkGray }
 }
-function Stop-IRTranscript { try { Stop-Transcript | Out-Null } catch { } }
+function Stop-IRTranscript { try { Stop-Transcript -WhatIf:$false | Out-Null } catch { } }
 
 Start-IRTranscript
 
@@ -252,6 +302,40 @@ function Resolve-ParamName {
     $keys = $cmd.Parameters.Keys
     foreach ($c in $Candidates) { if ($keys -contains $c) { return $c } }
     return $null
+}
+
+# Graph DELETE path segment for each authentication-method type. Used to remove
+# registered MFA methods; the password method has no delete endpoint and is
+# deliberately absent from this map.
+$script:MfaMethodPath = @{
+    'phoneAuthenticationMethod'                              = 'phoneMethods'
+    'microsoftAuthenticatorAuthenticationMethod'             = 'microsoftAuthenticatorMethods'
+    'fido2AuthenticationMethod'                              = 'fido2Methods'
+    'emailAuthenticationMethod'                              = 'emailMethods'
+    'softwareOathAuthenticationMethod'                       = 'softwareOathMethods'
+    'hardwareOathAuthenticationMethod'                       = 'hardwareOathMethods'
+    'windowsHelloForBusinessAuthenticationMethod'            = 'windowsHelloForBusinessMethods'
+    'temporaryAccessPassAuthenticationMethod'                = 'temporaryAccessPassMethods'
+    'platformCredentialAuthenticationMethod'                 = 'platformCredentialMethods'
+    'passwordlessMicrosoftAuthenticatorAuthenticationMethod' = 'passwordlessMicrosoftAuthenticatorMethods'
+}
+
+# Interactive yes/no gate for a destructive action. -PreApproved (set by the
+# matching switch) answers YES without prompting; under -WhatIf it always
+# answers NO, because the dry-run plan has already described the action.
+function Confirm-IRAction {
+    param(
+        [Parameter(Mandatory)][string]$Question,
+        [switch]$PreApproved
+    )
+    if ($script:dryRun) { return $false }
+    if ($PreApproved)   { Write-Host "  $Question -> YES (pre-approved by switch)" -ForegroundColor Yellow; return $true }
+    while ($true) {
+        $ans = (Read-Host "  $Question [yes/no]").Trim()
+        if ($ans -match '^(y|yes)$') { return $true }
+        if ($ans -match '^(n|no)$')  { Write-Host "     skipped." -ForegroundColor DarkGray; return $false }
+        Write-Host "     Please type 'yes' or 'no'." -ForegroundColor DarkYellow
+    }
 }
 
 function Get-GraphOnce {
@@ -328,8 +412,14 @@ if ($TenantId -match $placeholders) {
 }
 
 $graphScopes = @('User.ReadWrite.All','Directory.Read.All','AuditLog.Read.All',
-                 'Device.Read.All','Application.Read.All','Policy.Read.All',
-                 'UserAuthenticationMethod.Read.All','Reports.Read.All')
+                 'Application.Read.All','Policy.Read.All','Reports.Read.All')
+# Write scopes for auth methods / devices are requested ONLY when -Remediate is
+# set, so a read-only triage never asks the tenant for delete permissions.
+if ($Remediate) {
+    $graphScopes += @('UserAuthenticationMethod.ReadWrite.All','Device.ReadWrite.All')
+} else {
+    $graphScopes += @('UserAuthenticationMethod.Read.All','Device.Read.All')
+}
 
 if ($ForceFreshAuth) {
     Write-Host "  Clearing cached MSAL token (-ForceFreshAuth)..." -ForegroundColor DarkYellow
@@ -1008,83 +1098,25 @@ if (-not $canSearchAudit) {
     }
 }
 
-# ===========================================================================
-#                        PHASE 2 :  REMEDIATE
-# ===========================================================================
+# ---------------------------------------------------------------------------
+#  Remediation state (phase 2 runs AFTER the triage summary)
+# ---------------------------------------------------------------------------
+function New-IRPassword {
+    $upper = [char[]](65..90); $lower = [char[]](97..122)
+    $digit = [char[]](48..57); $sym   = [char[]]'!@#$%^&*()-_=+[]{}'
+    $chars = @(($upper | Get-Random), ($lower | Get-Random),
+               ($digit | Get-Random), ($sym   | Get-Random))
+    $pool  = $upper + $lower + $digit + $sym
+    $chars += 1..16 | ForEach-Object { $pool | Get-Random }
+    return -join ($chars | Sort-Object { Get-Random })
+}
+
 $script:passwordReset   = $false
 $script:sessionsRevoked = $false
-if ($Remediate) {
-    Write-Step "REMEDIATION PHASE (containment actions)"
-
-    if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Reset password TWICE (force change)')) {
-        function New-IRPassword {
-            $upper = [char[]](65..90); $lower = [char[]](97..122)
-            $digit = [char[]](48..57); $sym   = [char[]]'!@#$%^&*()-_=+[]{}'
-            $chars = @(($upper | Get-Random), ($lower | Get-Random),
-                       ($digit | Get-Random), ($sym   | Get-Random))
-            $pool  = $upper + $lower + $digit + $sym
-            $chars += 1..16 | ForEach-Object { $pool | Get-Random }
-            return -join ($chars | Sort-Object { Get-Random })
-        }
-
-        # Reset twice: the first value is a throwaway that invalidates anything the
-        # attacker may have set or cached; the second is the credential handed over.
-        $newPwd = $null
-        foreach ($pass in 1, 2) {
-            $newPwd = New-IRPassword
-            Update-MgUser -UserId $uid -PasswordProfile @{ Password = $newPwd; ForceChangePasswordNextSignIn = $true } -ErrorAction Stop
-            Write-Host ("  Password reset {0}/2 done." -f $pass) -ForegroundColor Green
-            if ($pass -eq 1) { Start-Sleep -Seconds 5 }
-        }
-
-        Stop-IRTranscript
-        Write-Host "  Password reset twice. Temp credential (deliver out-of-band, do NOT paste into the ticket):" -ForegroundColor Yellow
-        Write-Host "  $newPwd" -ForegroundColor Yellow
-        if ($EmitTempPasswordFile) {
-            $pwdFile = Join-Path $OutputPath ("{0}_TEMP_PASSWORD.txt" -f $IssueId)
-            $newPwd | Out-File $pwdFile -Encoding UTF8 -WhatIf:$false
-            Write-Host "  Written to: $pwdFile  (NOT in the evidence zip - delete after handoff)" -ForegroundColor DarkYellow
-        }
-        Read-Host "  Press ENTER once the credential has been captured" | Out-Null
-        Start-IRTranscript
-        Remove-Variable newPwd -ErrorAction SilentlyContinue
-        $script:passwordReset = $true
-    }
-
-    if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Revoke ALL sign-in sessions and sign the user out everywhere')) {
-        # Revoke-MgUserSignInSession invalidates every refresh token and session
-        # cookie, which signs the user out of all devices/apps once the current
-        # access tokens expire (up to ~1h). Run twice to catch anything issued
-        # between the password reset and the first revoke.
-        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
-        Write-Host "  Sessions revoked / user signed out (pass 1)." -ForegroundColor Green
-        Start-Sleep -Seconds 10
-        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
-        Write-Host "  Sessions revoked / user signed out (pass 2)." -ForegroundColor Green
-        $script:sessionsRevoked = $true
-    }
-
-    # Forwarding and inbox rules are deliberately LEFT IN PLACE: they are
-    # evidence and are surfaced in the triage summary for manual handling.
-    if ($mbx -and ($mbx.ForwardingSmtpAddress -or $mbx.ForwardingAddress)) {
-        Write-Host "  NOTE: mailbox forwarding is SET and was NOT cleared - see triage summary." -ForegroundColor Yellow
-    }
-    if ($suspiciousRules) {
-        Write-Host ("  NOTE: {0} suspicious inbox rule(s) were NOT disabled - see triage summary." -f @($suspiciousRules).Count) -ForegroundColor Yellow
-    }
-
-    if ($BlockSignIn) {
-        if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Block sign-in (AccountEnabled=$false)')) {
-            Update-MgUser -UserId $uid -AccountEnabled:$false
-            Write-Host "  Account sign-in BLOCKED." -ForegroundColor Green
-        }
-    }
-
-    if ($newDevices) {
-        Write-Host ("  NOTE: {0} device(s) registered in window flagged for MANUAL review/deletion." -f @($newDevices).Count) -ForegroundColor Yellow
-    }
-    Write-Host "  NOTE: MFA methods are NOT auto-removed. Review AuthenticationMethods*.csv." -ForegroundColor Yellow
-}
+$script:signInBlocked   = $false
+$script:mfaStatus       = 'not attempted'
+$script:deviceStatus    = 'not attempted'
+$script:dryRun          = [bool]$WhatIfPreference
 
 # ===========================================================================
 #  TRIAGE SUMMARY  (printed in both modes, written to TRIAGE_SUMMARY.txt)
@@ -1103,7 +1135,7 @@ Add-Triage ("Target    : {0} ({1})" -f $user.DisplayName, $UserPrincipalName) 'W
 Add-Triage ("ObjectId  : {0}" -f $uid) 'White'
 Add-Triage ("Tenant    : {0}  /  EXO org: {1}" -f $resolvedTenantId, $script:exoOrg) 'White'
 Add-Triage ("Window    : {0:yyyy-MM-dd HH:mm} -> {1:yyyy-MM-dd HH:mm} (local)" -f $CompromiseStart, $CompromiseEnd) 'White'
-Add-Triage ("Mode      : {0}" -f $(if ($Remediate) { 'INVESTIGATE + REMEDIATE' } else { 'INVESTIGATE (read-only)' })) 'White'
+Add-Triage ("Mode      : {0}" -f $(if ($Remediate -and $script:dryRun) { 'INVESTIGATE + REMEDIATE (-WhatIf DRY RUN)' } elseif ($Remediate) { 'INVESTIGATE + REMEDIATE' } else { 'INVESTIGATE (read-only)' })) 'White'
 Add-Triage ("Account   : {0}" -f $(if ($user.AccountEnabled -eq $false) { 'sign-in BLOCKED' } else { 'sign-in enabled' })) 'White'
 
 # ---- Sign-ins ----
@@ -1244,21 +1276,278 @@ Add-TriageHeader 'UNIFIED AUDIT LOG'
 Add-Triage ("ExchangeItem events : {0}" -f $(if ($null -ne $script:auditItemCount)  { $script:auditItemCount }  else { 'NOT COLLECTED' }))
 Add-Triage ("ExchangeAdmin events: {0}   rule/forwarding admin events: {1}" -f $(if ($null -ne $script:auditAdminCount) { $script:auditAdminCount } else { 'NOT COLLECTED' }), @($script:ruleEvents).Count) $(if ($script:ruleEvents) { 'Red' } else { 'Gray' })
 
-# ---- Actions ----
-Add-TriageHeader 'CONTAINMENT STATUS'
-if ($Remediate) {
-    Add-Triage ("Password reset x2      : {0}" -f $(if ($script:passwordReset)   { 'DONE (credential shown above, force-change at next sign-in)' } else { 'SKIPPED / WhatIf' })) $(if ($script:passwordReset)   { 'Green' } else { 'Yellow' })
-    Add-Triage ("Sessions revoked x2    : {0}" -f $(if ($script:sessionsRevoked) { 'DONE (user signed out everywhere)' } else { 'SKIPPED / WhatIf' })) $(if ($script:sessionsRevoked) { 'Green' } else { 'Yellow' })
-    Add-Triage ("Sign-in blocked        : {0}" -f $(if ($BlockSignIn) { 'YES' } else { 'no (-BlockSignIn not set)' }))
-} else {
-    Add-Triage "Read-only run - NO containment performed. Re-run with -Remediate to reset the password twice and revoke sessions." 'Yellow'
+function Save-TriageSummary {
+    $script:triage | Out-File (Join-Path $caseFolder 'TRIAGE_SUMMARY.txt') -Encoding UTF8 -WhatIf:$false
 }
-Add-Triage "Forwarding             : NOT changed (manual)" 'DarkYellow'
-Add-Triage "Inbox rules            : NOT changed (manual)" 'DarkYellow'
-Add-Triage "MFA methods / devices  : NOT changed (manual)" 'DarkYellow'
-
-$script:triage | Out-File (Join-Path $caseFolder 'TRIAGE_SUMMARY.txt') -Encoding UTF8 -WhatIf:$false
+Save-TriageSummary
 Write-Host "`n  Written to TRIAGE_SUMMARY.txt" -ForegroundColor Cyan
+if (-not $Remediate) {
+    Write-Host "  Read-only run - no containment performed. Re-run with -Remediate to act on the above." -ForegroundColor Yellow
+    Write-Host "  Add -WhatIf to -Remediate to see the full containment plan without executing it." -ForegroundColor DarkGray
+}
+
+
+# ===========================================================================
+#                        PHASE 2 :  REMEDIATE
+#          (runs AFTER the triage summary so the operator decides with
+#           the evidence on screen; every destructive step is prompted)
+# ===========================================================================
+if ($Remediate) {
+    Write-Step "REMEDIATION PHASE (containment actions)"
+
+    # ---------------------------------------------------------------- plan --
+    # The dry-run plan is printed whenever -Remediate runs, not only under
+    # -WhatIf: the operator sees exactly what is about to be attempted before
+    # answering any prompt. Under -WhatIf nothing after this executes.
+    $mfaTargets    = @($script:mfaOnly)
+    $deviceTargets = if ($AllRegisteredDevices) { @($script:devices) } else { @($newDevices) }
+    $deviceScope   = if ($AllRegisteredDevices) { 'ALL registered devices (-AllRegisteredDevices)' } else { 'devices registered IN THE COMPROMISE WINDOW' }
+
+    if ($script:dryRun) {
+        Write-Host "  *** -WhatIf DRY RUN: nothing below is executed and no prompt is shown. ***" -ForegroundColor Magenta
+    } else {
+        Write-Host "  PLAN - each step below is confirmed before it runs." -ForegroundColor Magenta
+    }
+    Write-Host ""
+    Write-Host ("  Target: {0}  ({1})" -f $UserPrincipalName, $uid) -ForegroundColor Magenta
+    Write-Host ""
+
+    Write-Host "  [1] Reset password TWICE                                    [PROMPTED yes/no]" -ForegroundColor Magenta
+    Write-Host ("      Update-MgUser -UserId {0} -PasswordProfile @{{ Password='<random-20>'; ForceChangePasswordNextSignIn=`$true }}   # pass 1 - throwaway" -f $uid) -ForegroundColor DarkGray
+    Write-Host "      (wait 5s)" -ForegroundColor DarkGray
+    Write-Host ("      Update-MgUser -UserId {0} -PasswordProfile @{{ Password='<random-20>'; ForceChangePasswordNextSignIn=`$true }}   # pass 2 - hand-over" -f $uid) -ForegroundColor DarkGray
+    Write-Host "      -> transcript paused, pass-2 password PRINTED TO THIS TERMINAL, user must change it at next sign-in" -ForegroundColor DarkGray
+    if ($EmitTempPasswordFile) {
+        Write-Host ("      -> also written to {0}" -f (Join-Path $OutputPath ("{0}_TEMP_PASSWORD.txt" -f $IssueId))) -ForegroundColor DarkGray
+    }
+    Write-Host ""
+
+    Write-Host "  [2] Revoke ALL sign-in sessions TWICE                       [PROMPTED yes/no, same prompt as 1]" -ForegroundColor Magenta
+    Write-Host ("      Revoke-MgUserSignInSession -UserId {0}     # pass 1" -f $uid) -ForegroundColor DarkGray
+    Write-Host "      (wait 10s)" -ForegroundColor DarkGray
+    Write-Host ("      Revoke-MgUserSignInSession -UserId {0}     # pass 2" -f $uid) -ForegroundColor DarkGray
+    Write-Host "      -> refresh tokens + session cookies invalidated; signs the user out everywhere (access tokens die within ~1h)" -ForegroundColor DarkGray
+    Write-Host ""
+
+    Write-Host ("  [3] Reset MFA - delete registered auth methods              [{0}]" -f $(if ($ResetMfaMethods) { 'pre-approved by -ResetMfaMethods' } else { 'PROMPTED yes/no' })) -ForegroundColor Magenta
+    if ($mfaTargets.Count -eq 0) {
+        Write-Host "      nothing to delete - no non-password methods registered" -ForegroundColor DarkGray
+    } else {
+        foreach ($m in $mfaTargets) {
+            $seg   = $script:MfaMethodPath[$m.MethodType]
+            $isNew = if ($script:newAuth -and ($script:newAuth.MethodId -contains $m.MethodId)) { '  <- REGISTERED IN WINDOW' } else { '' }
+            if ($seg) {
+                Write-Host ("      DELETE /users/{0}/authentication/{1}/{2}" -f $uid, $seg, $m.MethodId) -ForegroundColor DarkGray
+                Write-Host ("             {0}  {1}{2}" -f $m.MethodType, $m.DisplayName, $isNew) -ForegroundColor $(if ($isNew) { 'Red' } else { 'DarkGray' })
+            } else {
+                Write-Host ("      [skip] {0} - no delete endpoint for this method type" -f $m.MethodType) -ForegroundColor DarkYellow
+            }
+        }
+        Write-Host "      -> forces the user to re-register MFA at next sign-in. The password method is never touched." -ForegroundColor DarkGray
+    }
+    Write-Host ""
+
+    Write-Host ("  [4] Wipe Entra registered devices                           [{0}]" -f $(if ($RemoveRegisteredDevices) { 'pre-approved by -RemoveRegisteredDevices' } else { 'PROMPTED yes/no' })) -ForegroundColor Magenta
+    Write-Host ("      scope: {0}" -f $deviceScope) -ForegroundColor DarkGray
+    if ($deviceTargets.Count -eq 0) {
+        Write-Host "      nothing to delete in scope" -ForegroundColor DarkGray
+    } else {
+        foreach ($d in $deviceTargets) {
+            $isNew = if ($newDevices -and ($newDevices.ObjectId -contains $d.ObjectId)) { '  <- REGISTERED IN WINDOW' } else { '' }
+            Write-Host ("      DELETE /devices/{0}" -f $d.ObjectId) -ForegroundColor DarkGray
+            Write-Host ("             {0}  {1}  trust={2}  managed={3}{4}" -f $d.DisplayName, $d.OperatingSystem, $d.TrustType, $d.IsManaged, $isNew) -ForegroundColor $(if ($isNew) { 'Red' } else { 'DarkGray' })
+        }
+        Write-Host "      -> removes the DEVICE OBJECT from Entra (deregisters it). This is NOT an Intune remote wipe" -ForegroundColor DarkYellow
+        Write-Host "         and does not erase the physical machine. A legitimate device must re-join/re-register." -ForegroundColor DarkYellow
+    }
+    Write-Host ""
+
+    Write-Host ("  [5] Block sign-in                                           [{0}]" -f $(if ($BlockSignIn) { 'enabled by -BlockSignIn' } else { 'NOT planned - -BlockSignIn not set' })) -ForegroundColor Magenta
+    if ($BlockSignIn) { Write-Host ("      Update-MgUser -UserId {0} -AccountEnabled:`$false" -f $uid) -ForegroundColor DarkGray }
+    Write-Host ""
+
+    Write-Host "  NOT touched by -Remediate (left as evidence, see triage summary):" -ForegroundColor Magenta
+    if ($mbx -and ($mbx.ForwardingSmtpAddress -or $mbx.ForwardingAddress)) {
+        Write-Host ("      - mailbox forwarding -> {0}{1}" -f $mbx.ForwardingAddress, $mbx.ForwardingSmtpAddress) -ForegroundColor DarkGray
+    } else { Write-Host "      - mailbox forwarding (none set)" -ForegroundColor DarkGray }
+    Write-Host ("      - {0} suspicious inbox rule(s){1}" -f @($suspiciousRules).Count, $(if ($suspiciousRules) { ': ' + (($suspiciousRules.Name) -join ', ') } else { '' })) -ForegroundColor DarkGray
+    Write-Host ("      - {0} mailbox FullAccess grant(s), {1} SendAs grant(s)" -f @($script:perms).Count, @($script:sendAs).Count) -ForegroundColor DarkGray
+    Write-Host ("      - {0} OAuth grant(s) with mail scopes" -f @($script:mailScoped).Count) -ForegroundColor DarkGray
+    Write-Host ""
+
+    if ($script:dryRun) {
+        Write-Host "  -WhatIf: stopping here. Re-run without -WhatIf to execute the plan above." -ForegroundColor Magenta
+        $script:mfaStatus    = "WOULD PROMPT ($($mfaTargets.Count) method(s) in scope)"
+        $script:deviceStatus = "WOULD PROMPT ($($deviceTargets.Count) device(s) in scope)"
+    }
+
+    # Single gate for the two non-optional steps; [3] and [4] are asked separately.
+    $doAuto = Confirm-IRAction -Question "Proceed with [1] password reset x2 and [2] session revoke x2?"
+    if (-not $doAuto -and -not $script:dryRun) {
+        Write-Host "  Declined - password and sessions left untouched." -ForegroundColor Yellow
+    }
+
+    # ------------------------------------------------------- [1] password --
+    if ($doAuto -and $PSCmdlet.ShouldProcess($UserPrincipalName,'Reset password TWICE (force change)')) {
+        # Reset twice: the first value is a throwaway that invalidates anything the
+        # attacker may have set or cached; the second is the credential handed over.
+        $newPwd = $null
+        foreach ($pass in 1, 2) {
+            $newPwd = New-IRPassword
+            Update-MgUser -UserId $uid -PasswordProfile @{ Password = $newPwd; ForceChangePasswordNextSignIn = $true } -ErrorAction Stop
+            Write-Host ("  Password reset {0}/2 done." -f $pass) -ForegroundColor Green
+            if ($pass -eq 1) { Start-Sleep -Seconds 5 }
+        }
+
+        Stop-IRTranscript
+        Write-Host ""
+        Write-Host "  ===================================================" -ForegroundColor Yellow
+        Write-Host "  NEW PASSWORD (deliver out-of-band, do NOT paste into the ticket):" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "      $newPwd" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  ===================================================" -ForegroundColor Yellow
+        if ($EmitTempPasswordFile) {
+            $pwdFile = Join-Path $OutputPath ("{0}_TEMP_PASSWORD.txt" -f $IssueId)
+            $newPwd | Out-File $pwdFile -Encoding UTF8 -WhatIf:$false
+            Write-Host "  Written to: $pwdFile  (NOT in the evidence zip - delete after handoff)" -ForegroundColor DarkYellow
+        }
+        Read-Host "  Press ENTER once the credential has been captured" | Out-Null
+        Start-IRTranscript
+        Remove-Variable newPwd -ErrorAction SilentlyContinue -WhatIf:$false
+        $script:passwordReset = $true
+    }
+
+    # ------------------------------------------------------- [2] sessions --
+    if ($doAuto -and $PSCmdlet.ShouldProcess($UserPrincipalName,'Revoke ALL sign-in sessions and sign the user out everywhere')) {
+        # Revoke-MgUserSignInSession invalidates every refresh token and session
+        # cookie, which signs the user out of all devices/apps once the current
+        # access tokens expire (up to ~1h). Run twice to catch anything issued
+        # between the password reset and the first revoke.
+        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
+        Write-Host "  Sessions revoked / user signed out (pass 1)." -ForegroundColor Green
+        Start-Sleep -Seconds 10
+        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
+        Write-Host "  Sessions revoked / user signed out (pass 2)." -ForegroundColor Green
+        $script:sessionsRevoked = $true
+    }
+
+    # ------------------------------------------------------------ [3] MFA --
+    Write-Host ""
+    Write-Host "  --- Reset MFA (delete registered authentication methods) ---" -ForegroundColor Cyan
+    if ($mfaTargets.Count -eq 0) {
+        Write-Host "  No non-password methods registered - nothing to reset." -ForegroundColor DarkGray
+        if (-not $script:dryRun) { $script:mfaStatus = 'nothing to reset' }
+    } else {
+        foreach ($m in $mfaTargets) {
+            $isNew = if ($script:newAuth -and ($script:newAuth.MethodId -contains $m.MethodId)) { '  <- REGISTERED IN WINDOW' } else { '' }
+            Write-Host ("     {0,-45} {1,-25}{2}" -f $m.MethodType, $m.DisplayName, $isNew) -ForegroundColor $(if ($isNew) { 'Red' } else { 'Gray' })
+        }
+        Write-Host "  Deleting these forces the user to re-register MFA at next sign-in." -ForegroundColor DarkYellow
+        if (Confirm-IRAction -Question ("Delete all {0} registered MFA method(s) for {1}?" -f $mfaTargets.Count, $UserPrincipalName) -PreApproved:$ResetMfaMethods) {
+            $mfaDeleted = 0; $mfaFailed = 0; $mfaSkipped = 0
+            foreach ($m in $mfaTargets) {
+                $seg = $script:MfaMethodPath[$m.MethodType]
+                if (-not $seg) {
+                    Write-Host ("  [SKIP] {0} - no Graph delete endpoint for this method type; remove it in the Entra portal." -f $m.MethodType) -ForegroundColor DarkYellow
+                    $mfaSkipped++
+                    continue
+                }
+                if ($PSCmdlet.ShouldProcess(("{0} / {1} '{2}'" -f $UserPrincipalName, $m.MethodType, $m.DisplayName),'Delete authentication method')) {
+                    try {
+                        Invoke-MgGraphRequest -Method DELETE -ErrorAction Stop `
+                            -Uri ("https://graph.microsoft.com/v1.0/users/{0}/authentication/{1}/{2}" -f $uid, $seg, $m.MethodId) | Out-Null
+                        Write-Host ("  Deleted: {0}  {1}" -f $m.MethodType, $m.DisplayName) -ForegroundColor Green
+                        $mfaDeleted++
+                    } catch {
+                        Write-Host ("  [FAILED] {0} '{1}': {2}" -f $m.MethodType, $m.DisplayName, $_.Exception.Message) -ForegroundColor Red
+                        if ($_.Exception.Message -match 'Authorization|Forbidden|403') {
+                            Write-Host "     -> needs UserAuthenticationMethod.ReadWrite.All AND a role that can manage this user's auth methods." -ForegroundColor Red
+                        }
+                        $mfaFailed++
+                    }
+                }
+            }
+            $script:mfaStatus = "{0} deleted, {1} failed, {2} skipped" -f $mfaDeleted, $mfaFailed, $mfaSkipped
+            Add-Finding ("MFA methods reset: $script:mfaStatus. User must re-register MFA.") 'MEDIUM'
+        } else {
+            if (-not $script:dryRun) { $script:mfaStatus = 'DECLINED by operator' }
+        }
+    }
+
+    # -------------------------------------------------------- [4] devices --
+    Write-Host ""
+    Write-Host "  --- Wipe Entra registered devices ---" -ForegroundColor Cyan
+    Write-Host ("  Scope: {0}" -f $deviceScope) -ForegroundColor DarkGray
+    if ($deviceTargets.Count -eq 0) {
+        Write-Host "  No devices in scope - nothing to remove." -ForegroundColor DarkGray
+        if (-not $AllRegisteredDevices -and @($script:devices).Count -gt 0) {
+            Write-Host ("  ({0} device(s) are registered but none inside the window; re-run with -AllRegisteredDevices to target them.)" -f @($script:devices).Count) -ForegroundColor DarkGray
+        }
+        if (-not $script:dryRun) { $script:deviceStatus = 'nothing in scope' }
+    } else {
+        foreach ($d in $deviceTargets) {
+            $isNew = if ($newDevices -and ($newDevices.ObjectId -contains $d.ObjectId)) { '  <- REGISTERED IN WINDOW' } else { '' }
+            Write-Host ("     {0,-30} {1,-18} trust={2,-14} managed={3,-5} compliant={4,-5}{5}" -f $d.DisplayName, $d.OperatingSystem, $d.TrustType, $d.IsManaged, $d.IsCompliant, $isNew) -ForegroundColor $(if ($isNew) { 'Red' } else { 'Gray' })
+        }
+        Write-Host "  This DEREGISTERS the device object from Entra. It is NOT an Intune remote wipe" -ForegroundColor DarkYellow
+        Write-Host "  and does not erase the machine. A legitimate device will have to re-join." -ForegroundColor DarkYellow
+        if (Confirm-IRAction -Question ("Delete {0} Entra device object(s)?" -f $deviceTargets.Count) -PreApproved:$RemoveRegisteredDevices) {
+            $devDeleted = 0; $devFailed = 0
+            foreach ($d in $deviceTargets) {
+                if ($PSCmdlet.ShouldProcess(("device '{0}' ({1})" -f $d.DisplayName, $d.ObjectId),'Delete Entra device object')) {
+                    try {
+                        Invoke-MgGraphRequest -Method DELETE -ErrorAction Stop `
+                            -Uri ("https://graph.microsoft.com/v1.0/devices/{0}" -f $d.ObjectId) | Out-Null
+                        Write-Host ("  Deleted device: {0}" -f $d.DisplayName) -ForegroundColor Green
+                        $devDeleted++
+                    } catch {
+                        Write-Host ("  [FAILED] device '{0}': {1}" -f $d.DisplayName, $_.Exception.Message) -ForegroundColor Red
+                        if ($_.Exception.Message -match 'Authorization|Forbidden|403') {
+                            Write-Host "     -> needs Device.ReadWrite.All and Cloud Device Administrator (or Intune Administrator)." -ForegroundColor Red
+                        }
+                        $devFailed++
+                    }
+                }
+            }
+            $script:deviceStatus = "{0} deleted, {1} failed" -f $devDeleted, $devFailed
+            Add-Finding ("Entra device objects removed: $script:deviceStatus.") 'MEDIUM'
+        } else {
+            if (-not $script:dryRun) { $script:deviceStatus = 'DECLINED by operator' }
+        }
+    }
+
+    # --------------------------------------------------- [5] block signin --
+    if ($BlockSignIn) {
+        Write-Host ""
+        if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Block sign-in (AccountEnabled=$false)')) {
+            Update-MgUser -UserId $uid -AccountEnabled:$false -ErrorAction Stop
+            Write-Host "  Account sign-in BLOCKED." -ForegroundColor Green
+            $script:signInBlocked = $true
+        }
+    }
+
+    # ------------------------------------------------------------ recap ----
+    Add-TriageHeader 'CONTAINMENT STATUS'
+    if ($script:dryRun) {
+        Add-Triage "-WhatIf DRY RUN - NOTHING was executed. Plan is above." 'Magenta'
+        Add-Triage "Password reset x2      : WOULD RUN" 'Magenta'
+        Add-Triage "Sessions revoked x2    : WOULD RUN" 'Magenta'
+        Add-Triage ("MFA methods reset      : {0}" -f $script:mfaStatus) 'Magenta'
+        Add-Triage ("Devices wiped          : {0}" -f $script:deviceStatus) 'Magenta'
+        Add-Triage ("Sign-in blocked        : {0}" -f $(if ($BlockSignIn) { 'WOULD RUN' } else { 'not planned (-BlockSignIn not set)' })) 'Magenta'
+    } else {
+        Add-Triage ("Password reset x2      : {0}" -f $(if ($script:passwordReset)   { 'DONE (new password printed to terminal, force-change at next sign-in)' } else { 'DECLINED by operator' })) $(if ($script:passwordReset)   { 'Green' } else { 'Yellow' })
+        Add-Triage ("Sessions revoked x2    : {0}" -f $(if ($script:sessionsRevoked) { 'DONE (user signed out everywhere)' } else { 'DECLINED by operator' })) $(if ($script:sessionsRevoked) { 'Green' } else { 'Yellow' })
+        Add-Triage ("MFA methods reset      : {0}" -f $script:mfaStatus)    $(if ($script:mfaStatus    -match 'deleted') { 'Green' } else { 'Yellow' })
+        Add-Triage ("Devices wiped          : {0}" -f $script:deviceStatus) $(if ($script:deviceStatus -match 'deleted') { 'Green' } else { 'Yellow' })
+        Add-Triage ("Sign-in blocked        : {0}" -f $(if ($script:signInBlocked) { 'YES' } else { 'no' }))
+    }
+    Add-Triage "Forwarding             : NOT changed (manual - see above)" 'DarkYellow'
+    Add-Triage "Inbox rules            : NOT changed (manual - see above)" 'DarkYellow'
+    Save-TriageSummary
+    Write-Host "`n  TRIAGE_SUMMARY.txt updated with containment status." -ForegroundColor Cyan
+}
 
 # ===========================================================================
 #  Findings + evidence-gap roll-up
