@@ -9,7 +9,12 @@
 
     The script runs in two phases:
        INVESTIGATE  (default, read-only)  -> collects evidence for the CS-#### case folder
-       REMEDIATE    (-Remediate switch)   -> performs containment actions
+                                             and prints a TRIAGE SUMMARY (also TRIAGE_SUMMARY.txt)
+       REMEDIATE    (-Remediate switch)   -> resets the password twice (final password
+                                             printed to the terminal) and revokes all
+                                             sessions / signs the user out everywhere.
+                                             Forwarding and inbox rules are NOT changed;
+                                             they are reported in the triage summary.
 
     Every containment action honors -WhatIf / -Confirm (SupportsShouldProcess).
     Evidence collection and packaging deliberately opt OUT of -WhatIf so that a
@@ -132,8 +137,9 @@
 .PARAMETER Remediate / BlockSignIn / EmitTempPasswordFile
     Containment switches. See the REMEDIATE phase. -Remediate resets the
     password TWICE (throwaway, then the hand-over credential printed to the
-    terminal), revokes all sign-in sessions twice, clears forwarding and
-    disables suspicious inbox rules.
+    terminal) and revokes all sign-in sessions twice (signs the user out
+    everywhere). It does NOT clear forwarding or disable inbox rules - those
+    are listed in the triage summary for manual handling.
 
 .EXAMPLE
     .\Invoke-CompromisedMailboxIR.ps1 -TenantId 'clienttenant.onmicrosoft.com' `
@@ -642,10 +648,24 @@ Invoke-Collect 'PreFlight_AuditPermissions' {
 #                        PHASE 1 :  INVESTIGATE  (read-only)
 # ===========================================================================
 
-$suspiciousRules = @()
-$mbx             = $null
-$newDevices      = @()
-$interactive     = @()
+$suspiciousRules        = @()
+$mbx                    = $null
+$newDevices             = @()
+$interactive            = @()
+$script:nonInteractive  = @()
+$script:sentMail        = @()
+$script:perms           = @()
+$script:sendAs          = @()
+$script:cas             = $null
+$script:devices         = @()
+$script:grants          = @()
+$script:mailScoped      = @()
+$script:mfaReg          = $null
+$script:mfaOnly         = @()
+$script:newAuth         = @()
+$script:auditItemCount  = $null
+$script:auditAdminCount = $null
+$script:ruleEvents      = @()
 
 Write-Step "Collecting inbox rules & forwarding config"
 Invoke-Collect 'InboxRules' {
@@ -684,25 +704,25 @@ Invoke-Collect 'MailboxForwarding' {
 
 Write-Step "Mailbox delegation & permissions"
 Invoke-Collect 'MailboxPermissions' {
-    $perms = Get-MailboxPermission -Identity $UserPrincipalName |
+    $script:perms = Get-MailboxPermission -Identity $UserPrincipalName |
         Where-Object { $_.User -notlike 'NT AUTHORITY\SELF' -and -not $_.IsInherited } |
         Select-Object User, @{n='AccessRights';e={ $_.AccessRights -join '; ' }}, Deny
-    Save-Evidence $perms 'MailboxPermissions_FullAccess' 'No non-default FullAccess grants (clean/expected state).'
-    if ($perms) { Add-Finding ("{0} non-default FullAccess grant(s) on the mailbox" -f @($perms).Count) 'HIGH' }
+    Save-Evidence $script:perms 'MailboxPermissions_FullAccess' 'No non-default FullAccess grants (clean/expected state).'
+    if ($script:perms) { Add-Finding ("{0} non-default FullAccess grant(s) on the mailbox" -f @($script:perms).Count) 'HIGH' }
 }
 Invoke-Collect 'RecipientPermissions' {
-    $sendAs = Get-RecipientPermission -Identity $UserPrincipalName |
+    $script:sendAs = Get-RecipientPermission -Identity $UserPrincipalName |
         Where-Object { $_.Trustee -notlike 'NT AUTHORITY\SELF' } |
         Select-Object Trustee, @{n='AccessRights';e={ $_.AccessRights -join '; ' }}
-    Save-Evidence $sendAs 'MailboxPermissions_SendAs' 'No SendAs delegations (clean/expected state).'
-    if ($sendAs) { Add-Finding ("{0} SendAs delegation(s) on the mailbox" -f @($sendAs).Count) 'HIGH' }
+    Save-Evidence $script:sendAs 'MailboxPermissions_SendAs' 'No SendAs delegations (clean/expected state).'
+    if ($script:sendAs) { Add-Finding ("{0} SendAs delegation(s) on the mailbox" -f @($script:sendAs).Count) 'HIGH' }
 }
 Invoke-Collect 'CASMailbox' {
-    $cas = Get-CASMailbox -Identity $UserPrincipalName |
+    $script:cas = Get-CASMailbox -Identity $UserPrincipalName |
         Select-Object DisplayName, ActiveSyncEnabled, ImapEnabled, PopEnabled,
                       OwaEnabled, MAPIEnabled, EwsEnabled, SmtpClientAuthenticationDisabled
-    Save-Evidence $cas 'CASMailbox_Protocols'
-    if ($cas.ImapEnabled -or $cas.PopEnabled) {
+    Save-Evidence $script:cas 'CASMailbox_Protocols'
+    if ($script:cas.ImapEnabled -or $script:cas.PopEnabled) {
         Add-Finding "Legacy protocols enabled (IMAP and/or POP) - common BEC access path." 'MEDIUM'
     }
 }
@@ -724,8 +744,8 @@ Invoke-Collect 'MessageTrace' {
         } while ($batch -and $batch.Count -eq 1000 -and $page -le 10)
         $trace = $all
     }
-    $trace = $trace | Select-Object Received, SenderAddress, RecipientAddress, Subject, Status
-    Save-Evidence $trace 'SentMail_MessageTrace' `
+    $script:sentMail = @($trace | Select-Object Received, SenderAddress, RecipientAddress, Subject, Status)
+    Save-Evidence $script:sentMail 'SentMail_MessageTrace' `
         'No sent mail in window. Trace retention is ~10 days - if the window is older, use Start-HistoricalSearch.'
 }
 
@@ -767,7 +787,7 @@ Invoke-Collect 'SignInLogs_NonInteractive' {
     $filter = [uri]::EscapeDataString("$signInFilter and signInEventTypes/any(t: t eq 'nonInteractiveUser')")
     $uri    = "https://graph.microsoft.com/beta/auditLogs/signIns?`$filter=$filter&`$top=999"
     $raw = Get-GraphPaged -Uri $uri -Label 'SignInLogs_NonInteractive'
-    $nonInteractive = $raw | ForEach-Object {
+    $script:nonInteractive = @($raw | ForEach-Object {
         [pscustomobject]@{
             CreatedDateTime   = $_.createdDateTime
             UserPrincipalName = $_.userPrincipalName
@@ -787,8 +807,8 @@ Invoke-Collect 'SignInLogs_NonInteractive' {
             DeviceManaged     = $_.deviceDetail.isManaged
             UserAgent         = $_.userAgent
         }
-    }
-    Save-Evidence $nonInteractive 'SignInLogs_NonInteractive' `
+    })
+    Save-Evidence $script:nonInteractive 'SignInLogs_NonInteractive' `
         'No non-interactive sign-ins in window. Token-refresh activity is the usual persistence signal here.'
 }
 
@@ -815,16 +835,18 @@ Invoke-Collect 'AuthMethods' {
     }
     Save-Evidence $script:authMethods 'AuthenticationMethods'
 
-    $mfaOnly = $script:authMethods | Where-Object { $_.MethodType -ne 'passwordAuthenticationMethod' }
+    $script:mfaOnly = @($script:authMethods | Where-Object { $_.MethodType -ne 'passwordAuthenticationMethod' })
+    $mfaOnly = $script:mfaOnly
     if (-not $mfaOnly) {
         Add-Finding "NO MFA METHODS REGISTERED - account is password-only. Likely root cause; require MFA registration as part of recovery." 'HIGH'
     } else {
         Write-Host ("  {0} non-password method(s): {1}" -f @($mfaOnly).Count, (($mfaOnly.MethodType | Sort-Object -Unique) -join ', ')) -ForegroundColor Green
     }
 
-    $newAuth = $script:authMethods | Where-Object {
+    $script:newAuth = @($script:authMethods | Where-Object {
         $_.CreatedDate -and $_.CreatedDate -ge $CompromiseStart -and $_.CreatedDate -le $CompromiseEnd
-    }
+    })
+    $newAuth = $script:newAuth
     if ($newAuth) {
         Add-Finding ("{0} auth method(s) registered DURING the window - treat as attacker persistence" -f @($newAuth).Count) 'HIGH'
         Save-Evidence $newAuth 'AuthenticationMethods_NEW_IN_WINDOW'
@@ -847,6 +869,7 @@ Invoke-Collect 'AuthMethodRegistrationDetail' {
         MethodsRegistered   = ($r.methodsRegistered -join '; ')
         LastUpdatedDateTime = $r.lastUpdatedDateTime
     }
+    $script:mfaReg = $regOut
     Save-Evidence $regOut 'AuthenticationMethods_RegistrationDetail'
     if ($r.isMfaRegistered -eq $false) { Add-Finding "Registration report confirms isMfaRegistered=false." 'HIGH' }
     if ($r.isAdmin -eq $true) { Add-Finding "Compromised account holds an ADMIN role - escalate scope, review tenant-wide changes in the window." 'HIGH' }
@@ -887,6 +910,7 @@ Invoke-Collect 'RegisteredDevices' {
                 }
             }
         }
+        $script:devices = @($devices)
         Save-Evidence $devices 'RegisteredDevices'
         $script:newDevices = $devices | Where-Object {
             $_.RegistrationDate -and
@@ -901,7 +925,7 @@ Invoke-Collect 'RegisteredDevices' {
 
 Write-Step "OAuth app consent grants (attacker persistence check)"
 Invoke-Collect 'OAuthGrants' {
-    $grants = Get-MgUserOauth2PermissionGrant -UserId $uid -All | ForEach-Object {
+    $script:grants = @(Get-MgUserOauth2PermissionGrant -UserId $uid -All | ForEach-Object {
         $sp = Get-MgServicePrincipal -ServicePrincipalId $_.ClientId -ErrorAction SilentlyContinue
         [pscustomobject]@{
             App         = $sp.DisplayName
@@ -910,9 +934,11 @@ Invoke-Collect 'OAuthGrants' {
             ConsentType = $_.ConsentType
             Publisher   = $sp.PublisherName
         }
-    }
+    })
+    $grants = $script:grants
     Save-Evidence $grants 'OAuth_ConsentGrants' 'No user-level OAuth consent grants.'
-    $mailScoped = $grants | Where-Object { $_.Scope -match 'Mail\.|MailboxSettings|offline_access|IMAP|POP|SMTP' }
+    $script:mailScoped = @($grants | Where-Object { $_.Scope -match 'Mail\.|MailboxSettings|offline_access|IMAP|POP|SMTP' })
+    $mailScoped = $script:mailScoped
     if ($mailScoped) {
         Add-Finding ("{0} OAuth grant(s) carry mail-access scopes - review for unfamiliar apps: {1}" -f `
             @($mailScoped).Count, (($mailScoped.App | Sort-Object -Unique) -join ', ')) 'MEDIUM'
@@ -965,13 +991,15 @@ if (-not $canSearchAudit) {
 
         $audit = Search-AuditRetry -RecordType 'ExchangeItem'
         if ($null -eq $audit) { Write-Host "  UnifiedAuditLog_ExchangeItem: NOT COLLECTED (see findings)" -ForegroundColor Red }
-        else { Save-Evidence ($audit | Select-Object CreationDate, Operations, UserIds, AuditData) 'UnifiedAuditLog_ExchangeItem' $reason }
+        else { $script:auditItemCount = @($audit).Count; Save-Evidence ($audit | Select-Object CreationDate, Operations, UserIds, AuditData) 'UnifiedAuditLog_ExchangeItem' $reason }
 
         $adminAudit = Search-AuditRetry -RecordType 'ExchangeAdmin'
         if ($null -eq $adminAudit) { Write-Host "  UnifiedAuditLog_ExchangeAdmin: NOT COLLECTED (see findings)" -ForegroundColor Red }
         else {
+            $script:auditAdminCount = @($adminAudit).Count
             Save-Evidence ($adminAudit | Select-Object CreationDate, Operations, UserIds, AuditData) 'UnifiedAuditLog_ExchangeAdmin' $reason
-            $ruleEvents = $adminAudit | Where-Object { $_.Operations -match 'InboxRule|Set-Mailbox|ForwardingSmtpAddress' }
+            $script:ruleEvents = @($adminAudit | Where-Object { $_.Operations -match 'InboxRule|Set-Mailbox|ForwardingSmtpAddress' })
+            $ruleEvents = $script:ruleEvents
             if ($ruleEvents) {
                 Add-Finding ("{0} rule/forwarding admin event(s) in the window" -f @($ruleEvents).Count) 'HIGH'
                 Save-Evidence $ruleEvents 'UnifiedAuditLog_RULE_EVENTS'
@@ -983,6 +1011,8 @@ if (-not $canSearchAudit) {
 # ===========================================================================
 #                        PHASE 2 :  REMEDIATE
 # ===========================================================================
+$script:passwordReset   = $false
+$script:sessionsRevoked = $false
 if ($Remediate) {
     Write-Step "REMEDIATION PHASE (containment actions)"
 
@@ -1018,34 +1048,29 @@ if ($Remediate) {
         Read-Host "  Press ENTER once the credential has been captured" | Out-Null
         Start-IRTranscript
         Remove-Variable newPwd -ErrorAction SilentlyContinue
+        $script:passwordReset = $true
     }
 
-    if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Revoke ALL sign-in sessions')) {
-        Revoke-MgUserSignInSession -UserId $uid | Out-Null
-        Write-Host "  Sessions revoked." -ForegroundColor Green
+    if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Revoke ALL sign-in sessions and sign the user out everywhere')) {
+        # Revoke-MgUserSignInSession invalidates every refresh token and session
+        # cookie, which signs the user out of all devices/apps once the current
+        # access tokens expire (up to ~1h). Run twice to catch anything issued
+        # between the password reset and the first revoke.
+        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
+        Write-Host "  Sessions revoked / user signed out (pass 1)." -ForegroundColor Green
         Start-Sleep -Seconds 10
-        Revoke-MgUserSignInSession -UserId $uid | Out-Null
-        Write-Host "  Sessions revoked (second pass)." -ForegroundColor Green
+        Revoke-MgUserSignInSession -UserId $uid -ErrorAction Stop | Out-Null
+        Write-Host "  Sessions revoked / user signed out (pass 2)." -ForegroundColor Green
+        $script:sessionsRevoked = $true
     }
 
+    # Forwarding and inbox rules are deliberately LEFT IN PLACE: they are
+    # evidence and are surfaced in the triage summary for manual handling.
     if ($mbx -and ($mbx.ForwardingSmtpAddress -or $mbx.ForwardingAddress)) {
-        if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Remove mailbox forwarding')) {
-            Set-Mailbox -Identity $UserPrincipalName -ForwardingAddress $null `
-                        -ForwardingSmtpAddress $null -DeliverToMailboxAndForward $false
-            Write-Host "  Mailbox forwarding cleared." -ForegroundColor Green
-        }
+        Write-Host "  NOTE: mailbox forwarding is SET and was NOT cleared - see triage summary." -ForegroundColor Yellow
     }
-
-    foreach ($r in $suspiciousRules) {
-        if ($PSCmdlet.ShouldProcess("$UserPrincipalName rule '$($r.Name)'",'Disable inbox rule')) {
-            $ruleRef = if ($r.RuleIdentity) { $r.RuleIdentity } else { $r.Identity }
-            try {
-                Disable-InboxRule -Mailbox $UserPrincipalName -Identity $ruleRef -Confirm:$false
-                Write-Host "  Disabled rule: $($r.Name)" -ForegroundColor Green
-            } catch {
-                Write-Host "  [FAILED] rule '$($r.Name)': $($_.Exception.Message)" -ForegroundColor Red
-            }
-        }
+    if ($suspiciousRules) {
+        Write-Host ("  NOTE: {0} suspicious inbox rule(s) were NOT disabled - see triage summary." -f @($suspiciousRules).Count) -ForegroundColor Yellow
     }
 
     if ($BlockSignIn) {
@@ -1060,6 +1085,180 @@ if ($Remediate) {
     }
     Write-Host "  NOTE: MFA methods are NOT auto-removed. Review AuthenticationMethods*.csv." -ForegroundColor Yellow
 }
+
+# ===========================================================================
+#  TRIAGE SUMMARY  (printed in both modes, written to TRIAGE_SUMMARY.txt)
+# ===========================================================================
+Write-Step "TRIAGE SUMMARY - $IssueId"
+$script:triage = [System.Collections.Generic.List[string]]::new()
+function Add-Triage {
+    param([string]$Text, [string]$Color = 'Gray')
+    $script:triage.Add($Text)
+    Write-Host "  $Text" -ForegroundColor $Color
+}
+function Add-TriageHeader { param([string]$Text) Add-Triage '' ; Add-Triage ("-- {0} --" -f $Text) 'Cyan' }
+
+Add-Triage ("Case      : {0}" -f $IssueId) 'White'
+Add-Triage ("Target    : {0} ({1})" -f $user.DisplayName, $UserPrincipalName) 'White'
+Add-Triage ("ObjectId  : {0}" -f $uid) 'White'
+Add-Triage ("Tenant    : {0}  /  EXO org: {1}" -f $resolvedTenantId, $script:exoOrg) 'White'
+Add-Triage ("Window    : {0:yyyy-MM-dd HH:mm} -> {1:yyyy-MM-dd HH:mm} (local)" -f $CompromiseStart, $CompromiseEnd) 'White'
+Add-Triage ("Mode      : {0}" -f $(if ($Remediate) { 'INVESTIGATE + REMEDIATE' } else { 'INVESTIGATE (read-only)' })) 'White'
+Add-Triage ("Account   : {0}" -f $(if ($user.AccountEnabled -eq $false) { 'sign-in BLOCKED' } else { 'sign-in enabled' })) 'White'
+
+# ---- Sign-ins ----
+Add-TriageHeader 'SIGN-INS'
+$ia = @($script:interactive); $ni = @($script:nonInteractive)
+$allSignIns = $ia + $ni
+Add-Triage ("Interactive     : {0}   Non-interactive: {1}" -f $ia.Count, $ni.Count) 'White'
+if ($allSignIns.Count -gt 0) {
+    $failed = @($allSignIns | Where-Object { $_.Status -and $_.Status -ne 0 })
+    Add-Triage ("Failed attempts : {0}" -f $failed.Count)
+    $countries = $allSignIns | Where-Object Country | Group-Object Country | Sort-Object Count -Descending
+    if ($countries) {
+        Add-Triage ("Countries       : {0}" -f (($countries | ForEach-Object { "{0} ({1})" -f $_.Name, $_.Count }) -join ', ')) $(if ($countries.Count -gt 1) { 'Yellow' } else { 'Gray' })
+    }
+    $ips = $allSignIns | Where-Object IpAddress | Group-Object IpAddress | Sort-Object Count -Descending
+    Add-Triage ("Distinct IPs    : {0}" -f @($ips).Count)
+    foreach ($ip in ($ips | Select-Object -First 10)) {
+        $sample = $ip.Group | Select-Object -First 1
+        $loc = @($sample.City, $sample.Country) | Where-Object { $_ } 
+        Add-Triage ("   {0,-40} {1,4}x  {2}" -f $ip.Name, $ip.Count, ($loc -join ', '))
+    }
+    $apps = $allSignIns | Where-Object AppDisplayName | Group-Object AppDisplayName | Sort-Object Count -Descending | Select-Object -First 8
+    if ($apps) { Add-Triage ("Top apps        : {0}" -f (($apps | ForEach-Object { "{0} ({1})" -f $_.Name, $_.Count }) -join ', ')) }
+    $clients = $allSignIns | Where-Object ClientAppUsed | Group-Object ClientAppUsed | Sort-Object Count -Descending
+    if ($clients) { Add-Triage ("Client apps     : {0}" -f (($clients | ForEach-Object { "{0} ({1})" -f $_.Name, $_.Count }) -join ', ')) }
+    $legacy = @($allSignIns | Where-Object { $_.ClientAppUsed -match 'IMAP|POP|SMTP|Other clients|Exchange ActiveSync|Authenticated SMTP' })
+    if ($legacy) { Add-Triage ("Legacy-protocol sign-ins: {0}  <- review" -f $legacy.Count) 'Red' }
+    $devs = $allSignIns | Where-Object { $_.Device -or $_.DeviceOS -or $_.Browser } |
+            Group-Object { "{0} | {1} | {2}" -f $(if ($_.Device) { $_.Device } else { '(unregistered)' }), $_.DeviceOS, $_.Browser } | Sort-Object Count -Descending | Select-Object -First 10
+    if ($devs) {
+        Add-Triage "Devices seen in sign-ins (name | OS | browser):"
+        foreach ($d in $devs) { Add-Triage ("   {0,4}x  {1}" -f $d.Count, $d.Name) }
+    }
+} else {
+    Add-Triage "No sign-in records in window (see NOT COLLECTED / findings for why)." 'DarkYellow'
+}
+
+# ---- Sent mail ----
+Add-TriageHeader 'OUTBOUND MAIL (message trace, sent by user in window)'
+$sm = @($script:sentMail)
+Add-Triage ("Messages sent   : {0}" -f $sm.Count) 'White'
+if ($sm.Count -gt 0) {
+    $rcpts = $sm | Where-Object RecipientAddress | Group-Object RecipientAddress | Sort-Object Count -Descending
+    $extDomains = $sm | Where-Object RecipientAddress | ForEach-Object { ($_.RecipientAddress -split '@')[-1] } |
+                  Where-Object { $_ -ne (($UserPrincipalName -split '@')[-1]) } | Group-Object | Sort-Object Count -Descending
+    Add-Triage ("Distinct rcpts  : {0}   External domains: {1}" -f @($rcpts).Count, @($extDomains).Count)
+    foreach ($dm in ($extDomains | Select-Object -First 10)) { Add-Triage ("   {0,4}x  {1}" -f $dm.Count, $dm.Name) }
+    $subjects = $sm | Where-Object Subject | Group-Object Subject | Sort-Object Count -Descending | Select-Object -First 8
+    if ($subjects) {
+        Add-Triage "Top subjects:"
+        foreach ($sj in $subjects) { Add-Triage ("   {0,4}x  {1}" -f $sj.Count, $sj.Name) }
+    }
+    $firstSent = ($sm | Sort-Object Received | Select-Object -First 1).Received
+    $lastSent  = ($sm | Sort-Object Received | Select-Object -Last 1).Received
+    Add-Triage ("First/last sent : {0:yyyy-MM-dd HH:mm} -> {1:yyyy-MM-dd HH:mm}" -f $firstSent, $lastSent)
+}
+
+# ---- Forwarding (SUSPICIOUS - left in place) ----
+Add-TriageHeader 'MAILBOX FORWARDING  (NOT changed by this script)'
+if ($mbx -and ($mbx.ForwardingSmtpAddress -or $mbx.ForwardingAddress)) {
+    Add-Triage "!! SUSPICIOUS: mailbox-level forwarding is SET" 'Red'
+    if ($mbx.ForwardingAddress)     { Add-Triage ("   ForwardingAddress          : {0}" -f $mbx.ForwardingAddress) 'Red' }
+    if ($mbx.ForwardingSmtpAddress) { Add-Triage ("   ForwardingSmtpAddress      : {0}" -f $mbx.ForwardingSmtpAddress) 'Red' }
+    Add-Triage ("   DeliverToMailboxAndForward : {0}" -f $mbx.DeliverToMailboxAndForward) 'Red'
+    Add-Triage "   -> Left in place for manual review. Clear with: Set-Mailbox -Identity '$UserPrincipalName' -ForwardingAddress `$null -ForwardingSmtpAddress `$null -DeliverToMailboxAndForward `$false" 'DarkYellow'
+} elseif ($mbx) {
+    Add-Triage "No mailbox-level forwarding configured." 'Green'
+} else {
+    Add-Triage "Forwarding config NOT collected." 'DarkYellow'
+}
+
+# ---- Inbox rules (SUSPICIOUS - left in place) ----
+Add-TriageHeader 'INBOX RULES  (NOT changed by this script)'
+$sr = @($suspiciousRules)
+Add-Triage ("Total rules: {0}   Suspicious: {1}" -f @($script:inboxRules).Count, $sr.Count) $(if ($sr.Count) { 'Red' } else { 'Green' })
+foreach ($r in $sr) {
+    $why = @()
+    if ($r.DeleteMessage -eq $true)        { $why += 'deletes mail' }
+    if ($r.RedirectTo)                     { $why += "redirects to $($r.RedirectTo)" }
+    if ($r.ForwardTo)                      { $why += "forwards to $($r.ForwardTo)" }
+    if ($r.ForwardAsAttachmentTo)          { $why += "forwards (attachment) to $($r.ForwardAsAttachmentTo)" }
+    if ($r.MoveToFolder)                   { $why += "moves to '$($r.MoveToFolder)'" }
+    if ($r.MarkAsRead -eq $true)           { $why += 'marks read' }
+    $cond = @()
+    if ($r.From)                 { $cond += "from: $($r.From)" }
+    if ($r.SubjectContainsWords) { $cond += "subject~: $($r.SubjectContainsWords)" }
+    if ($r.BodyContainsWords)    { $cond += "body~: $($r.BodyContainsWords)" }
+    Add-Triage ("!! '{0}'  enabled={1}  priority={2}" -f $r.Name, $r.Enabled, $r.Priority) 'Red'
+    Add-Triage ("      actions : {0}" -f ($why -join '; ')) 'Red'
+    if ($cond) { Add-Triage ("      when    : {0}" -f ($cond -join '; ')) 'Red' }
+}
+if ($sr.Count) {
+    Add-Triage "   -> Left in place for manual review. Disable with:" 'DarkYellow'
+    foreach ($r in $sr) {
+        $ruleRef = if ($r.RuleIdentity) { $r.RuleIdentity } else { $r.Identity }
+        Add-Triage ("      Disable-InboxRule -Mailbox '{0}' -Identity '{1}'   # '{2}'" -f $UserPrincipalName, $ruleRef, $r.Name) 'DarkYellow'
+    }
+}
+
+# ---- Delegation / protocols / OAuth ----
+Add-TriageHeader 'DELEGATION, PROTOCOLS, OAUTH'
+Add-Triage ("FullAccess grants : {0}{1}" -f @($script:perms).Count,  $(if ($script:perms)  { '  -> ' + (($script:perms.User)     -join ', ') } else { '' })) $(if ($script:perms)  { 'Red' } else { 'Gray' })
+Add-Triage ("SendAs grants     : {0}{1}" -f @($script:sendAs).Count, $(if ($script:sendAs) { '  -> ' + (($script:sendAs.Trustee) -join ', ') } else { '' })) $(if ($script:sendAs) { 'Red' } else { 'Gray' })
+if ($script:cas) {
+    Add-Triage ("Protocols         : IMAP={0} POP={1} ActiveSync={2} OWA={3} MAPI={4} EWS={5} SMTPAuthDisabled={6}" -f `
+        $script:cas.ImapEnabled, $script:cas.PopEnabled, $script:cas.ActiveSyncEnabled, $script:cas.OwaEnabled,
+        $script:cas.MAPIEnabled, $script:cas.EwsEnabled, $script:cas.SmtpClientAuthenticationDisabled) $(if ($script:cas.ImapEnabled -or $script:cas.PopEnabled) { 'Yellow' } else { 'Gray' })
+}
+Add-Triage ("OAuth grants      : {0} total, {1} with mail scopes{2}" -f @($script:grants).Count, @($script:mailScoped).Count,
+    $(if ($script:mailScoped) { '  -> ' + (($script:mailScoped.App | Sort-Object -Unique) -join ', ') } else { '' })) $(if ($script:mailScoped) { 'Yellow' } else { 'Gray' })
+
+# ---- MFA ----
+Add-TriageHeader 'MFA / AUTHENTICATION METHODS'
+if ($script:mfaReg) {
+    Add-Triage ("Registered={0}  Capable={1}  Default={2}  IsAdmin={3}" -f $script:mfaReg.IsMfaRegistered, $script:mfaReg.IsMfaCapable, $script:mfaReg.DefaultMfaMethod, $script:mfaReg.IsAdmin) `
+        $(if ($script:mfaReg.IsMfaRegistered -eq $false -or $script:mfaReg.IsAdmin -eq $true) { 'Red' } else { 'Green' })
+    Add-Triage ("Methods (report): {0}" -f $script:mfaReg.MethodsRegistered)
+}
+$mo = @($script:mfaOnly)
+if ($mo.Count -eq 0 -and @($script:authMethods).Count -gt 0) { Add-Triage "!! NO non-password methods registered - password-only account" 'Red' }
+foreach ($m in $mo) {
+    $flag = if ($script:newAuth -and ($script:newAuth.MethodId -contains $m.MethodId)) { '  <- NEW IN WINDOW' } else { '' }
+    Add-Triage ("   {0,-40} {1,-30} {2}{3}" -f $m.MethodType, $m.DisplayName, $(if ($m.CreatedDate) { $m.CreatedDate.ToString('yyyy-MM-dd') } else { '' }), $flag) $(if ($flag) { 'Red' } else { 'Gray' })
+}
+
+# ---- Devices ----
+Add-TriageHeader 'ENTRA REGISTERED DEVICES'
+$dv = @($script:devices); $nd = @($script:newDevices)
+Add-Triage ("Registered: {0}   New in window: {1}" -f $dv.Count, $nd.Count) $(if ($nd.Count) { 'Red' } else { 'Gray' })
+foreach ($d in $dv) {
+    $flag = if ($nd -and ($nd.ObjectId -contains $d.ObjectId)) { '  <- NEW IN WINDOW' } else { '' }
+    Add-Triage ("   {0,-30} {1,-18} {2,-14} managed={3,-5} compliant={4,-5} reg={5}{6}" -f $d.DisplayName, $d.OperatingSystem, $d.TrustType, $d.IsManaged, $d.IsCompliant,
+        $(if ($d.RegistrationDate) { $d.RegistrationDate.ToString('yyyy-MM-dd') } else { '-' }), $flag) $(if ($flag) { 'Red' } else { 'Gray' })
+}
+
+# ---- Audit ----
+Add-TriageHeader 'UNIFIED AUDIT LOG'
+Add-Triage ("ExchangeItem events : {0}" -f $(if ($null -ne $script:auditItemCount)  { $script:auditItemCount }  else { 'NOT COLLECTED' }))
+Add-Triage ("ExchangeAdmin events: {0}   rule/forwarding admin events: {1}" -f $(if ($null -ne $script:auditAdminCount) { $script:auditAdminCount } else { 'NOT COLLECTED' }), @($script:ruleEvents).Count) $(if ($script:ruleEvents) { 'Red' } else { 'Gray' })
+
+# ---- Actions ----
+Add-TriageHeader 'CONTAINMENT STATUS'
+if ($Remediate) {
+    Add-Triage ("Password reset x2      : {0}" -f $(if ($script:passwordReset)   { 'DONE (credential shown above, force-change at next sign-in)' } else { 'SKIPPED / WhatIf' })) $(if ($script:passwordReset)   { 'Green' } else { 'Yellow' })
+    Add-Triage ("Sessions revoked x2    : {0}" -f $(if ($script:sessionsRevoked) { 'DONE (user signed out everywhere)' } else { 'SKIPPED / WhatIf' })) $(if ($script:sessionsRevoked) { 'Green' } else { 'Yellow' })
+    Add-Triage ("Sign-in blocked        : {0}" -f $(if ($BlockSignIn) { 'YES' } else { 'no (-BlockSignIn not set)' }))
+} else {
+    Add-Triage "Read-only run - NO containment performed. Re-run with -Remediate to reset the password twice and revoke sessions." 'Yellow'
+}
+Add-Triage "Forwarding             : NOT changed (manual)" 'DarkYellow'
+Add-Triage "Inbox rules            : NOT changed (manual)" 'DarkYellow'
+Add-Triage "MFA methods / devices  : NOT changed (manual)" 'DarkYellow'
+
+$script:triage | Out-File (Join-Path $caseFolder 'TRIAGE_SUMMARY.txt') -Encoding UTF8 -WhatIf:$false
+Write-Host "`n  Written to TRIAGE_SUMMARY.txt" -ForegroundColor Cyan
 
 # ===========================================================================
 #  Findings + evidence-gap roll-up
