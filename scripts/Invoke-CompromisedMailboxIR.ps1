@@ -415,6 +415,11 @@ $graphScopes = @('User.ReadWrite.All','Directory.Read.All','AuditLog.Read.All',
                  'Application.Read.All','Policy.Read.All','Reports.Read.All')
 # Write scopes for auth methods / devices are requested ONLY when -Remediate is
 # set, so a read-only triage never asks the tenant for delete permissions.
+# NOTE: password writes go through User.ReadWrite.All here. Microsoft's documented
+# least-privilege scope for passwordProfile is User-PasswordProfile.ReadWrite.All;
+# add it below if a password reset ever returns 403 (a 400 is the SDK bug, not a
+# permission problem). The operator also needs a role that can reset this user's
+# password - see "Who can reset passwords" in the Graph user resource docs.
 if ($Remediate) {
     $graphScopes += @('UserAuthenticationMethod.ReadWrite.All','Device.ReadWrite.All')
 } else {
@@ -1313,9 +1318,9 @@ if ($Remediate) {
     Write-Host ""
 
     Write-Host "  [1] Reset password TWICE                                    [PROMPTED yes/no]" -ForegroundColor Magenta
-    Write-Host ("      Update-MgUser -UserId {0} -PasswordProfile @{{ Password='<random-20>'; ForceChangePasswordNextSignIn=`$true }}   # pass 1 - throwaway" -f $uid) -ForegroundColor DarkGray
+    Write-Host ("      PATCH /v1.0/users/{0}   {{ passwordProfile: {{ password:'<random-20>', forceChangePasswordNextSignIn:true }} }}   # pass 1 - throwaway" -f $uid) -ForegroundColor DarkGray
     Write-Host "      (wait 5s)" -ForegroundColor DarkGray
-    Write-Host ("      Update-MgUser -UserId {0} -PasswordProfile @{{ Password='<random-20>'; ForceChangePasswordNextSignIn=`$true }}   # pass 2 - hand-over" -f $uid) -ForegroundColor DarkGray
+    Write-Host ("      PATCH /v1.0/users/{0}   {{ passwordProfile: {{ password:'<random-20>', forceChangePasswordNextSignIn:true }} }}   # pass 2 - hand-over" -f $uid) -ForegroundColor DarkGray
     Write-Host "      -> transcript paused, pass-2 password PRINTED TO THIS TERMINAL, user must change it at next sign-in" -ForegroundColor DarkGray
     if ($EmitTempPasswordFile) {
         Write-Host ("      -> also written to {0}" -f (Join-Path $OutputPath ("{0}_TEMP_PASSWORD.txt" -f $IssueId))) -ForegroundColor DarkGray
@@ -1363,7 +1368,7 @@ if ($Remediate) {
     Write-Host ""
 
     Write-Host ("  [5] Block sign-in                                           [{0}]" -f $(if ($BlockSignIn) { 'enabled by -BlockSignIn' } else { 'NOT planned - -BlockSignIn not set' })) -ForegroundColor Magenta
-    if ($BlockSignIn) { Write-Host ("      Update-MgUser -UserId {0} -AccountEnabled:`$false" -f $uid) -ForegroundColor DarkGray }
+    if ($BlockSignIn) { Write-Host ("      PATCH /v1.0/users/{0}   {{ accountEnabled: false }}" -f $uid) -ForegroundColor DarkGray }
     Write-Host ""
 
     Write-Host "  NOT touched by -Remediate (left as evidence, see triage summary):" -ForegroundColor Magenta
@@ -1391,10 +1396,19 @@ if ($Remediate) {
     if ($doAuto -and $PSCmdlet.ShouldProcess($UserPrincipalName,'Reset password TWICE (force change)')) {
         # Reset twice: the first value is a throwaway that invalidates anything the
         # attacker may have set or cached; the second is the credential handed over.
+        # FIX (round 13): Update-MgUser -PasswordProfile fails with
+        #   400 Request_BadRequest "Property userPrincipalName is invalid."
+        # Its UpdateExpanded parameter set builds a whole MicrosoftGraphUser body
+        # and emits userPrincipalName as an empty value, which Graph rejects. A
+        # raw PATCH sends ONLY passwordProfile, exactly as documented in
+        # https://learn.microsoft.com/graph/api/user-update (Example 3).
         $newPwd = $null
         foreach ($pass in 1, 2) {
             $newPwd = New-IRPassword
-            Update-MgUser -UserId $uid -PasswordProfile @{ Password = $newPwd; ForceChangePasswordNextSignIn = $true } -ErrorAction Stop
+            Invoke-MgGraphRequest -Method PATCH -ErrorAction Stop `
+                -Uri ("https://graph.microsoft.com/v1.0/users/{0}" -f $uid) `
+                -ContentType 'application/json' `
+                -Body @{ passwordProfile = @{ password = $newPwd; forceChangePasswordNextSignIn = $true } } | Out-Null
             Write-Host ("  Password reset {0}/2 done." -f $pass) -ForegroundColor Green
             if ($pass -eq 1) { Start-Sleep -Seconds 5 }
         }
@@ -1521,7 +1535,11 @@ if ($Remediate) {
     if ($BlockSignIn) {
         Write-Host ""
         if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Block sign-in (AccountEnabled=$false)')) {
-            Update-MgUser -UserId $uid -AccountEnabled:$false -ErrorAction Stop
+            # Same UpdateExpanded serialization bug as the password reset above.
+            Invoke-MgGraphRequest -Method PATCH -ErrorAction Stop `
+                -Uri ("https://graph.microsoft.com/v1.0/users/{0}" -f $uid) `
+                -ContentType 'application/json' `
+                -Body @{ accountEnabled = $false } | Out-Null
             Write-Host "  Account sign-in BLOCKED." -ForegroundColor Green
             $script:signInBlocked = $true
         }
