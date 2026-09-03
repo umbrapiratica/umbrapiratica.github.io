@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<HealthcheckData xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <DomainFQDN>corp.local</DomainFQDN>
+  <GenerationDate>2026-08-28T09:14:22</GenerationDate>
+  <RiskRules>
+    <HealthcheckRiskRule>
+      <Points>50</Points>
+      <Category>PrivilegedAccounts</Category>
+      <Model>PrivilegeControl</Model>
+      <RiskId>P-ServiceDomainAdmin</RiskId>
+      <Rationale>2 service accounts with an SPN are members of privileged groups and can be roasted by any domain user.</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>30</Points>
+      <Category>StaleObjects</Category>
+      <Model>ObsoleteOS</Model>
+      <RiskId>S-OS-2008</RiskId>
+      <Rationale>3 computers are running Windows Server 2008 R2, which is no longer supported.</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>15</Points>
+      <Category>Anomalies</Category>
+      <Model>GoldenTicket</Model>
+      <RiskId>A-Krbtgt</RiskId>
+      <Rationale>The krbtgt password was last changed 1122 days ago.</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>20</Points>
+      <Category>Anomalies</Category>
+      <Model>LocalAdminPassword</Model>
+      <RiskId>A-LAPS-Not-Installed</RiskId>
+      <Rationale>LAPS is not deployed to 412 of 480 workstations.</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>10</Points>
+      <Category>Trusts</Category>
+      <Model>TrustImpermeability</Model>
+      <RiskId>T-SIDFiltering</RiskId>
+      <Rationale>The external trust with partner.local does not have SID filtering enabled.</Rationale>
+    </HealthcheckRiskRule>
+    <HealthcheckRiskRule>
+      <Points>5</Points>
+      <Category>StaleObjects</Category>
+      <Model>Reconnaissance</Model>
+      <RiskId>S-DsHeuristicsAnonymous</RiskId>
+      <Rationale>Anonymous LDAP operations are permitted by the dsHeuristics attribute.</Rationale>
+    </HealthcheckRiskRule>
+  </RiskRules>
+</HealthcheckData>

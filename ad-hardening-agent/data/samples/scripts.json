@@ -1,0 +1,34 @@
+[
+  {
+    "name": "Disable-LLMNR-NBTNS-GPO",
+    "description": "Creates or updates the 'Hardening - Name Resolution' GPO to disable LLMNR (EnableMulticast=0) and sets NetBIOS over TCP/IP to disabled via DHCP option; links it to the target OU.",
+    "content": "param([string]$TargetOU)\nImport-Module GroupPolicy\n$gpo = Get-GPO -Name 'Hardening - Name Resolution' -ErrorAction SilentlyContinue\nif (-not $gpo) { $gpo = New-GPO -Name 'Hardening - Name Resolution' }\nSet-GPRegistryValue -Name $gpo.DisplayName -Key 'HKLM\\Software\\Policies\\Microsoft\\Windows NT\\DNSClient' -ValueName 'EnableMulticast' -Type DWord -Value 0\nNew-GPLink -Name $gpo.DisplayName -Target $TargetOU -LinkEnabled Yes -ErrorAction SilentlyContinue\n# Rollback: Remove-GPLink -Name 'Hardening - Name Resolution' -Target $TargetOU",
+    "tags": ["hardening", "LLMNR", "NBT-NS", "GPO", "relay"],
+    "last_used": "2026-04-11",
+    "known_good": true
+  },
+  {
+    "name": "Enforce-SMBSigning-GPO",
+    "description": "Sets RequireSecuritySignature=1 for both the LanmanServer and LanmanWorkstation policy keys in the 'Hardening - SMB' GPO.",
+    "content": "param([string]$TargetOU)\nImport-Module GroupPolicy\n$name = 'Hardening - SMB'\n$gpo = Get-GPO -Name $name -ErrorAction SilentlyContinue; if (-not $gpo) { $gpo = New-GPO -Name $name }\nSet-GPRegistryValue -Name $name -Key 'HKLM\\System\\CurrentControlSet\\Services\\LanmanServer\\Parameters' -ValueName 'RequireSecuritySignature' -Type DWord -Value 1\nSet-GPRegistryValue -Name $name -Key 'HKLM\\System\\CurrentControlSet\\Services\\LanmanWorkstation\\Parameters' -ValueName 'RequireSecuritySignature' -Type DWord -Value 1\nNew-GPLink -Name $name -Target $TargetOU -LinkEnabled Yes -ErrorAction SilentlyContinue",
+    "tags": ["hardening", "SMB", "signing", "GPO", "relay"],
+    "last_used": "2026-04-11",
+    "known_good": true
+  },
+  {
+    "name": "Get-LocalAdminMembership",
+    "description": "Read-only collector: enumerates the local Administrators group on each computer in an OU over WinRM and returns Host, Member, Source rows.",
+    "content": "param([string]$SearchBase)\nGet-ADComputer -SearchBase $SearchBase -Filter {Enabled -eq $true} | ForEach-Object {\n  $h = $_.DNSHostName\n  try { Invoke-Command -ComputerName $h -ScriptBlock { Get-LocalGroupMember -Group Administrators } -ErrorAction Stop |\n    Select-Object @{n='Host';e={$h}}, Name, PrincipalSource } catch { [pscustomobject]@{Host=$h;Name='<unreachable>';PrincipalSource=''} }\n}",
+    "tags": ["collection", "local-admin", "AdminTo", "read-only"],
+    "last_used": "2026-05-02",
+    "known_good": true
+  },
+  {
+    "name": "Remove-LocalAdminViaRestrictedGroups",
+    "description": "Applies a Restricted Groups policy for BUILTIN\\Administrators containing only Domain Admins and the LAPS-managed local account, at a GPO precedence that beats the legacy workstation GPO. Written after the WKS-014 revert.",
+    "content": "# Reviewed 2026-02; still flagged for a second run in production before it is considered known-good.\nparam([string]$TargetOU, [string[]]$AllowedMembers = @('CORP\\Domain Admins'))\n# ... Restricted Groups XML generation omitted for brevity ...",
+    "tags": ["hardening", "local-admin", "AdminTo", "GPO", "restricted-groups"],
+    "last_used": "2026-02-10",
+    "known_good": false
+  }
+]
