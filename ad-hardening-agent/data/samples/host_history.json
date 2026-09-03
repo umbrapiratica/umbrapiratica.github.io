@@ -1,0 +1,32 @@
+{
+  "APPSRV01.CORP.LOCAL": [
+    {
+      "hostname": "APPSRV01.CORP.LOCAL",
+      "date": "2025-11-14",
+      "description": "Red-team engagement landed on this host via a phished helpdesk user; unconstrained delegation was used to capture a DC machine-account TGT.",
+      "resolved": true,
+      "resolution_note": "Delegation flag was removed, but a change ticket re-enabled it for the legacy IIS app in 2026-02.",
+      "tags": ["red-team", "unconstrained-delegation", "reverted-fix"]
+    }
+  ],
+  "LEGACY-FS02.CORP.LOCAL": [
+    {
+      "hostname": "LEGACY-FS02.CORP.LOCAL",
+      "date": "2026-03-02",
+      "description": "Commodity malware alert from EDR; host is Server 2008 R2 and cannot run the current sensor.",
+      "resolved": false,
+      "resolution_note": null,
+      "tags": ["malware", "eol-os", "unresolved"]
+    }
+  ],
+  "WKS-014.CORP.LOCAL": [
+    {
+      "hostname": "WKS-014.CORP.LOCAL",
+      "date": "2026-01-20",
+      "description": "Local admin removed from Domain Users; GPO reverted within a week because the setting was applied by a lower-precedence GPO.",
+      "resolved": false,
+      "resolution_note": "Fix did not hold; needs Restricted Groups at a higher-precedence GPO.",
+      "tags": ["local-admin", "gpo-revert"]
+    }
+  ]
+}

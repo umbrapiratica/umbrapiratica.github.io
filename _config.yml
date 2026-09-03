@@ -50,3 +50,10 @@ plugins:
 #   - vendor/cache/
 #   - vendor/gems/
 #   - vendor/ruby/
+
+# Source code that should not be rendered as site pages
+exclude:
+  - ad-hardening-agent/
+  - Gemfile
+  - Gemfile.lock
+  - vendor/

@@ -1,0 +1,8 @@
+Indicator Name,Severity,Description,Affected Objects,Domain
+Unconstrained delegation on computer accounts,Critical,Computers configured for unconstrained Kerberos delegation outside the Domain Controllers OU,APPSRV01;PRINT03,corp.local
+Reversible password encryption enabled for users,High,Accounts store passwords using reversible encryption,legacy-chap;radius-svc,corp.local
+Machine account quota greater than zero,High,Any authenticated user can create computer accounts in the domain,corp.local,corp.local
+cpassword found in SYSVOL,Critical,Group Policy Preferences XML contains an encrypted password recoverable with the published key,Drives.xml;Groups.xml,corp.local
+Weak minimum password length,Medium,Domain minimum password length is below the recommended value,corp.local,corp.local
+Anonymous access to Active Directory,Medium,Pre-Windows 2000 Compatible Access contains a broad identity,Everyone,corp.local
+Zerologon vulnerability patch status unknown,High,Domain controllers could not be verified for the Netlogon secure channel patch,DC01;DC02,corp.local

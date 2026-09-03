@@ -1,0 +1,144 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1201",
+      "Properties": {
+        "name": "SVC-SQLPROD@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "hasspn": true,
+        "admincount": true,
+        "pwdneverexpires": true,
+        "dontreqpreauth": false,
+        "passwordnotreqd": false,
+        "serviceprincipalnames": [
+          "MSSQLSvc/sql01.corp.local:1433"
+        ],
+        "pwdlastset": 1600000000
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1301",
+          "PrincipalType": "Group",
+          "RightName": "GenericAll",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-512",
+          "PrincipalType": "Group",
+          "RightName": "GenericAll",
+          "IsInherited": true
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1202",
+      "Properties": {
+        "name": "SVC-BACKUP@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "hasspn": true,
+        "admincount": true,
+        "pwdneverexpires": true,
+        "dontreqpreauth": false,
+        "passwordnotreqd": false,
+        "serviceprincipalnames": [
+          "HTTP/backup.corp.local"
+        ],
+        "pwdlastset": 1580000000
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1302",
+          "PrincipalType": "Group",
+          "RightName": "ForceChangePassword",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1301",
+          "PrincipalType": "Group",
+          "RightName": "AddKeyCredentialLink",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1210",
+      "Properties": {
+        "name": "JLOPEZ@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "hasspn": false,
+        "admincount": false,
+        "pwdneverexpires": false,
+        "dontreqpreauth": true,
+        "passwordnotreqd": false
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1302",
+          "PrincipalType": "Group",
+          "RightName": "GenericWrite",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1211",
+      "Properties": {
+        "name": "UNIX-SYNC@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "hasspn": false,
+        "admincount": false,
+        "pwdneverexpires": true,
+        "dontreqpreauth": true,
+        "passwordnotreqd": true,
+        "sidhistory": [
+          "S-1-5-21-1004336348-1177238915-682003330-512"
+        ]
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1303",
+          "PrincipalType": "Group",
+          "RightName": "WriteSPN",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1301",
+      "Properties": {
+        "name": "HELPDESK-TIER1@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1302",
+      "Properties": {
+        "name": "SVC-IDSYNC@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true
+      },
+      "Aces": []
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1303",
+      "Properties": {
+        "name": "MPEREZ@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true
+      },
+      "Aces": []
+    }
+  ],
+  "meta": {
+    "methods": 5,
+    "type": "users",
+    "count": 7,
+    "version": 5
+  }
+}

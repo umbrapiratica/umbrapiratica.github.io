@@ -1,0 +1,1967 @@
+[
+  {
+    "id": "ADR-DELEG-001",
+    "title": "Unconstrained delegation on a non-domain-controller",
+    "category": "Delegation",
+    "severity": "Critical",
+    "summary": "A computer or service account outside the Domain Controllers OU is trusted for delegation to any service. Any account that authenticates to it leaves a usable TGT in that host's memory.",
+    "howItWorks": "When a host is trusted for unconstrained delegation, Kerberos hands it a forwardable TGT for every user who authenticates to it, and the host caches that TGT in LSASS so it can impersonate the user anywhere. An attacker with local admin on that host does not need to crack anything: they wait for (or coerce) a privileged account to authenticate, then extract the cached TGT and replay it. Coercion is the part that makes this critical, because the attacker does not have to wait. Protocols like MS-RPRN and MS-EFSR let any authenticated user tell a domain controller to authenticate outward to a chosen host, so an attacker can force a DC's own machine account to connect and hand over a TGT.",
+    "attackChain": [
+      "Enumerate objects with the TRUSTED_FOR_DELEGATION flag to find the host",
+      "Gain local administrator or SYSTEM on that host",
+      "Start a listener that captures Kerberos tickets as they arrive",
+      "Coerce a domain controller to authenticate to the host over RPC",
+      "Extract the DC machine account TGT and replay it to run DCSync",
+      "Dump credentials for krbtgt and every privileged principal in the domain"
+    ],
+    "mitre": [
+      "T1187",
+      "T1550.003"
+    ],
+    "remediation": [
+      {
+        "step": "Confirm the business reason. Legacy IIS and some SQL linked-server setups were built this way, so identify the application owner before changing anything.",
+        "command": "Get-ADComputer -Filter {TrustedForDelegation -eq $true} -Properties TrustedForDelegation,ServicePrincipalName,LastLogonDate,Description"
+      },
+      {
+        "step": "Move the workload to resource-based constrained delegation, which is configured on the target resource rather than the front-end host and does not cache TGTs.",
+        "command": "Set-ADComputer -Identity BACKEND01 -PrincipalsAllowedToDelegateToAccount (Get-ADComputer FRONTEND01)"
+      },
+      {
+        "step": "Remove the unconstrained delegation flag from the host once the replacement is proven.",
+        "command": "Set-ADComputer -Identity FRONTEND01 -TrustedForDelegation $false"
+      },
+      {
+        "step": "Add every privileged account to the Protected Users group and set the sensitive flag so their tickets can never be delegated again, even if another host is misconfigured later.",
+        "command": "Get-ADUser -Identity svc-admin | Set-ADAccountControl -AccountNotDelegated $true"
+      },
+      {
+        "step": "Reduce coercion surface: disable the Print Spooler service on domain controllers and enable Extended Protection for Authentication on AD CS and LDAP endpoints."
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=524288)' -Properties samAccountName | Where-Object { $_.ObjectClass -ne 'computer' -or $_.DistinguishedName -notlike '*OU=Domain Controllers*' }",
+    "breakRisk": "Applications that relied on double-hop authentication will start failing with access denied on the back end. Test in a maintenance window and keep the RBCD configuration ready to roll forward rather than reverting the flag.",
+    "effort": "Medium",
+    "lab": "In a lab domain, set the flag on a member server, run a coercion tool against your DC from a low-privileged account, and watch the DC machine ticket land in the host's ticket cache with klist. Then reconfigure with RBCD and repeat to confirm no TGT is cached.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1550.003 - Pass the Ticket",
+        "url": "https://attack.mitre.org/techniques/T1550/003/"
+      },
+      {
+        "title": "MITRE ATT&CK T1187 - Forced Authentication",
+        "url": "https://attack.mitre.org/techniques/T1187/"
+      },
+      {
+        "title": "Microsoft Learn - Kerberos constrained delegation overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/security/kerberos/kerberos-constrained-delegation-overview"
+      }
+    ],
+    "edges": [
+      "AllowedToDelegate-Unconstrained"
+    ]
+  },
+  {
+    "id": "ADR-DELEG-002",
+    "title": "Constrained delegation with protocol transition",
+    "category": "Delegation",
+    "severity": "High",
+    "summary": "An account has the TRUSTED_TO_AUTH_FOR_DELEGATION flag, letting it request tickets to its allowed targets on behalf of any user without that user ever authenticating.",
+    "howItWorks": "Constrained delegation limits which services an account can delegate to, which sounds safe. Protocol transition removes the requirement that the user actually authenticated first: the account can call S4U2Self to mint a ticket to itself for any user, then S4U2Proxy to reach the allowed service as that user. Compromise of the delegating account therefore means impersonating any user, including a domain admin, against every service in its allowed list. The allowed list is also weaker than it looks, because the service class in an SPN is not enforced during S4U2Proxy, so permission to delegate to one service on a host commonly extends to others on the same host.",
+    "attackChain": [
+      "Find accounts with protocol transition enabled and read their msDS-AllowedToDelegateTo list",
+      "Compromise the credentials or hash of that account",
+      "Request a service ticket for a domain admin to the allowed SPN using S4U",
+      "Swap the service class in the SPN to reach a more useful service on the same host",
+      "Access the target host as the impersonated administrator"
+    ],
+    "mitre": [
+      "T1550.003",
+      "T1134.001"
+    ],
+    "remediation": [
+      {
+        "step": "List every account configured for delegation and record which services each one actually needs.",
+        "command": "Get-ADObject -LDAPFilter '(msDS-AllowedToDelegateTo=*)' -Properties msDS-AllowedToDelegateTo,userAccountControl,samAccountName"
+      },
+      {
+        "step": "Turn off protocol transition where the application can use Kerberos-only constrained delegation, which requires the user's own forwardable ticket.",
+        "command": "Set-ADAccountControl -Identity svc-web -TrustedToAuthForDelegation $false"
+      },
+      {
+        "step": "Prefer resource-based constrained delegation so the resource owner controls who may delegate to it.",
+        "command": "Set-ADComputer -Identity SQL01 -PrincipalsAllowedToDelegateToAccount (Get-ADUser svc-web)"
+      },
+      {
+        "step": "Treat any account with delegation rights as tier 0. Rotate its password, restrict where it can log on, and monitor it for use outside its expected hosts."
+      },
+      {
+        "step": "Protect the identities that matter: Protected Users membership and the sensitive-and-cannot-be-delegated flag block S4U impersonation of those accounts entirely.",
+        "command": "Add-ADGroupMember -Identity 'Protected Users' -Members (Get-ADUser -Filter {AdminCount -eq 1})"
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=16777216)' -Properties samAccountName,msDS-AllowedToDelegateTo",
+    "breakRisk": "Web front ends that authenticate users with forms or client certificates and then reach a database need protocol transition. Removing it will break them unless the application is changed to use Kerberos end to end.",
+    "effort": "Medium",
+    "lab": "Configure a service account with protocol transition to a lab file server, then use S4U to obtain a ticket as a test administrator and browse the share. Add the same administrator to Protected Users and watch the S4U request fail.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1134.001 - Token Impersonation",
+        "url": "https://attack.mitre.org/techniques/T1134/001/"
+      },
+      {
+        "title": "Microsoft Learn - How to configure protected accounts",
+        "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/how-to-configure-protected-accounts"
+      }
+    ],
+    "edges": [
+      "AllowedToDelegate"
+    ]
+  },
+  {
+    "id": "ADR-DELEG-003",
+    "title": "Resource-based constrained delegation configured on an object",
+    "category": "Delegation",
+    "severity": "Medium",
+    "summary": "The msDS-AllowedToActOnBehalfOfOtherIdentity attribute is populated. This is often legitimate, but it is also the quietest way to persist in a domain.",
+    "howItWorks": "RBCD is set on the target: the target lists which principals may impersonate users to it. That makes it a good design, but it also means anyone who can write that one attribute on a computer object owns that computer. An attacker who holds GenericWrite, GenericAll, WriteProperty, or WriteDacl over a computer creates or takes over a machine account, points RBCD at it, then uses S4U to get a ticket as a local administrator on the target. The change looks like normal delegation configuration and survives password resets, so it is worth reviewing every populated value rather than assuming it is intentional.",
+    "attackChain": [
+      "Identify a computer where the current principal has write access to its object",
+      "Create a machine account, which the default machine account quota permits",
+      "Write the new account's SID into msDS-AllowedToActOnBehalfOfOtherIdentity on the target",
+      "Use S4U to request a service ticket as a local administrator on the target",
+      "Authenticate to the target with the resulting ticket"
+    ],
+    "mitre": [
+      "T1098",
+      "T1550.003"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate every object with the attribute set and resolve the SIDs it points at.",
+        "command": "Get-ADComputer -Filter {msDS-AllowedToActOnBehalfOfOtherIdentity -like '*'} -Properties PrincipalsAllowedToDelegateToAccount"
+      },
+      {
+        "step": "Clear the attribute anywhere the delegation is not documented and owned.",
+        "command": "Set-ADComputer -Identity TARGET01 -PrincipalsAllowedToDelegateToAccount $null"
+      },
+      {
+        "step": "Fix the access that allowed it to be set. Review the DACL on the object for non-tier-0 principals holding GenericAll, GenericWrite, WriteDacl, or WriteOwner.",
+        "command": "(Get-Acl -Path 'AD:\\CN=TARGET01,OU=Servers,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'GenericAll|GenericWrite|WriteDacl|WriteOwner' }"
+      },
+      {
+        "step": "Set the machine account quota to zero so unprivileged users cannot create the accounts these attacks need.",
+        "command": "Set-ADDomain -Identity corp.local -Replace @{'ms-DS-MachineAccountQuota'='0'}"
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(msDS-AllowedToActOnBehalfOfOtherIdentity=*)' -Properties samAccountName",
+    "breakRisk": "Low if the delegation is genuinely unused. Clearing an attribute that a live application depends on causes immediate access denied errors on the back-end service, so confirm ownership first.",
+    "effort": "Low",
+    "lab": "Give a test user GenericWrite over a lab computer object, create a machine account with that user, configure RBCD, and take a ticket as Administrator on the target. Then set the quota to zero and try again.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1098 - Account Manipulation",
+        "url": "https://attack.mitre.org/techniques/T1098/"
+      }
+    ],
+    "edges": [
+      "AllowedToAct"
+    ]
+  },
+  {
+    "id": "ADR-KERB-001",
+    "title": "Privileged account with a service principal name (kerberoastable)",
+    "category": "Kerberos",
+    "severity": "Critical",
+    "summary": "An account that is a member of a privileged group also has an SPN, so any domain user can request a service ticket encrypted with that account's password and crack it offline.",
+    "howItWorks": "Any authenticated user can ask for a service ticket for any SPN. Part of that ticket is encrypted with the password hash of the account that owns the SPN, so the requester can take it offline and try passwords against it at whatever rate their hardware allows, with no lockout and no failed logons in the domain. The severity comes from the combination, not the SPN alone: a service account with a twelve-character human-chosen password that also sits in Domain Admins converts a normal user into a domain administrator in the time it takes to run a wordlist. RC4-encrypted tickets crack fastest, which is why attackers request them explicitly.",
+    "attackChain": [
+      "Query LDAP for user objects that have an SPN and adminCount set to 1",
+      "Request service tickets for those SPNs as a normal domain user",
+      "Export the tickets and crack them offline against a wordlist",
+      "Authenticate with the recovered password as a privileged account"
+    ],
+    "mitre": [
+      "T1558.003"
+    ],
+    "remediation": [
+      {
+        "step": "List privileged accounts carrying an SPN. These are the ones to fix first, before general service account hygiene.",
+        "command": "Get-ADUser -LDAPFilter '(&(servicePrincipalName=*)(admincount=1))' -Properties servicePrincipalName,memberOf,PasswordLastSet"
+      },
+      {
+        "step": "Take the account out of the privileged group and grant only the specific rights the service needs. A service almost never needs Domain Admin.",
+        "command": "Remove-ADGroupMember -Identity 'Domain Admins' -Members svc-sql"
+      },
+      {
+        "step": "Convert the account to a group managed service account so Windows rotates a 240-character random password automatically.",
+        "command": "New-ADServiceAccount -Name gmsa-sql -DNSHostName sql01.corp.local -PrincipalsAllowedToRetrieveManagedPassword 'SQL Servers'"
+      },
+      {
+        "step": "Where a gMSA is not possible, set a password of at least 25 random characters and rotate it on a schedule. Length is what defeats offline cracking."
+      },
+      {
+        "step": "Add the account to Protected Users, which blocks RC4 for that principal and forces AES.",
+        "command": "Set-ADUser -Identity svc-sql -KerberosEncryptionType AES128,AES256"
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(&(servicePrincipalName=*)(admincount=1))' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Changing a service account password without coordinating the service restart causes an outage. gMSA migration requires the service to support it, so check the vendor documentation before scheduling.",
+    "effort": "High",
+    "lab": "Create a service account with a weak password and an SPN, add it to Domain Admins in a lab, roast it from an unprivileged session, and crack it. Then swap to a gMSA and confirm the ticket can no longer be cracked in reasonable time.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1558.003 - Kerberoasting",
+        "url": "https://attack.mitre.org/techniques/T1558/003/"
+      },
+      {
+        "title": "Microsoft Learn - Group managed service accounts overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/group-managed-service-accounts-overview"
+      }
+    ]
+  },
+  {
+    "id": "ADR-KERB-002",
+    "title": "Account with Kerberos pre-authentication disabled (AS-REP roastable)",
+    "category": "Kerberos",
+    "severity": "High",
+    "summary": "The DONT_REQ_PREAUTH flag is set, so the KDC will return encrypted material for this account to anyone who asks, without any credentials at all.",
+    "howItWorks": "Normally a client proves it knows the password by encrypting a timestamp before the KDC responds. With pre-authentication disabled, the KDC skips that check and returns an AS-REP containing data encrypted with the account's key to any unauthenticated requester who knows the username. That is offline cracking material obtained with no domain access, which makes it one of the few AD weaknesses exploitable from a position of zero credentials. The flag is usually set to accommodate an old Unix or appliance Kerberos client, and then never removed.",
+    "attackChain": [
+      "Enumerate or guess usernames, which is possible anonymously in many domains",
+      "Request an AS-REP for each name and keep the ones the KDC returns without pre-authentication",
+      "Crack the returned material offline",
+      "Log in with the recovered password"
+    ],
+    "mitre": [
+      "T1558.004"
+    ],
+    "remediation": [
+      {
+        "step": "Find every account with the flag, including disabled ones, since they can be re-enabled.",
+        "command": "Get-ADUser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=4194304)' -Properties userAccountControl,LastLogonDate,Description"
+      },
+      {
+        "step": "Re-enable pre-authentication on each account.",
+        "command": "Set-ADAccountControl -Identity jdoe -DoesNotRequirePreAuth $false"
+      },
+      {
+        "step": "If a legacy client genuinely requires it, reset the password to a long random value first, keep the account unprivileged, and document the exception with an owner and a review date."
+      },
+      {
+        "step": "Delete accounts that are stale as well as roastable rather than just fixing the flag."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=4194304)' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Low for modern clients. An old appliance that cannot perform pre-authentication will stop being able to obtain tickets, so identify the consumer before flipping it.",
+    "effort": "Low",
+    "lab": "Set the flag on a lab user with a dictionary password, request the AS-REP from an unjoined machine with no credentials, and crack it. Clear the flag and confirm the KDC now refuses.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1558.004 - AS-REP Roasting",
+        "url": "https://attack.mitre.org/techniques/T1558/004/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-KERB-003",
+    "title": "krbtgt password has not been rotated recently",
+    "category": "Kerberos",
+    "severity": "High",
+    "summary": "The krbtgt account password is older than the recommended interval. Its hash signs every TGT in the domain, so a stolen copy allows forged tickets for any identity until it is rotated twice.",
+    "howItWorks": "Every ticket-granting ticket in the domain is encrypted and signed with the krbtgt key. An attacker who reaches DCSync or otherwise dumps that hash can mint golden tickets: TGTs for any user, any group membership, any lifetime, accepted by every DC without ever touching the account's real password. Disabling accounts, resetting user passwords, and rebuilding member servers do not evict them. Only rotating krbtgt does, and it must be rotated twice with replication convergence in between because AD keeps the previous key to validate tickets already in flight.",
+    "attackChain": [
+      "Obtain replication rights or domain controller access",
+      "Dump the krbtgt hash with a directory replication request",
+      "Forge a TGT for an arbitrary privileged identity",
+      "Present the forged ticket to any service in the domain, indefinitely"
+    ],
+    "mitre": [
+      "T1558.001",
+      "T1003.006"
+    ],
+    "remediation": [
+      {
+        "step": "Check the current password age before doing anything, and confirm replication is healthy.",
+        "command": "Get-ADUser krbtgt -Properties PasswordLastSet | Select-Object Name,PasswordLastSet; repadmin /replsummary"
+      },
+      {
+        "step": "Reset the password once, then wait for full replication across every domain controller plus the longest ticket lifetime, typically 10 to 24 hours.",
+        "command": "Reset-ADAccountPassword -Identity krbtgt -Reset -NewPassword (ConvertTo-SecureString ([System.Web.Security.Membership]::GeneratePassword(64,12)) -AsPlainText -Force)"
+      },
+      {
+        "step": "Reset it a second time to invalidate the previous key. One reset alone leaves forged tickets working."
+      },
+      {
+        "step": "Schedule the double rotation at a fixed interval, commonly every 180 days, and always immediately after any suspected domain compromise."
+      },
+      {
+        "step": "Read-only domain controllers have their own krbtgt accounts. Include them in the rotation plan.",
+        "command": "Get-ADUser -Filter {Name -like 'krbtgt*'} -Properties PasswordLastSet"
+      }
+    ],
+    "validation": "Get-ADUser -Filter {Name -like 'krbtgt*'} -Properties PasswordLastSet | Select-Object Name,PasswordLastSet",
+    "breakRisk": "Rotating twice too quickly, before replication converges, invalidates tickets in flight and causes widespread authentication failures. The interval between the two resets is the entire safety mechanism.",
+    "effort": "Medium",
+    "lab": "In an isolated lab, dump krbtgt, forge a golden ticket, and confirm access. Reset once and observe the ticket still works. Reset a second time and watch it stop.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1558.001 - Golden Ticket",
+        "url": "https://attack.mitre.org/techniques/T1558/001/"
+      },
+      {
+        "title": "MITRE ATT&CK T1003.006 - DCSync",
+        "url": "https://attack.mitre.org/techniques/T1003/006/"
+      }
+    ],
+    "edges": [
+      "GoldenTicket"
+    ]
+  },
+  {
+    "id": "ADR-PRIV-001",
+    "title": "Excessive membership in a highly privileged group",
+    "category": "Privileged Access",
+    "severity": "High",
+    "summary": "A tier 0 group has more members than the environment can justify. Every member is a full path to domain compromise, and several of these groups grant that path less obviously than Domain Admins does.",
+    "howItWorks": "Domain Admins is the obvious one, but the quiet groups matter more because nobody audits them. Account Operators can modify most non-protected accounts, including adding themselves to groups. Backup Operators can read and write any file on a domain controller through the backup privilege, which includes the NTDS database. Server Operators can control services on DCs, which means running code as SYSTEM there. Print Operators can load drivers. DnsAdmins historically allowed loading an arbitrary DLL into the DNS service running as SYSTEM on a DC. An attacker who compromises any member of these groups reaches the same place as compromising a domain admin, with far less scrutiny.",
+    "attackChain": [
+      "Enumerate group membership, which any domain user can read",
+      "Target the least monitored member, often a stale or service account",
+      "Use the group's specific privilege to reach code execution or write access on a domain controller",
+      "Dump the directory database and take the domain"
+    ],
+    "mitre": [
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate every tier 0 group including nested members, and get an owner's confirmation for each account.",
+        "command": "'Domain Admins','Enterprise Admins','Schema Admins','Account Operators','Backup Operators','Server Operators','Print Operators','DnsAdmins' | ForEach-Object { Get-ADGroupMember -Identity $_ -Recursive | Select-Object @{n='Group';e={$_}},Name,objectClass }"
+      },
+      {
+        "step": "Empty Account Operators, Server Operators, and Print Operators. Microsoft's own guidance is that these should have no members, and their functions should be delegated explicitly instead."
+      },
+      {
+        "step": "Give administrators separate accounts for privileged work, and keep those accounts out of email and browsing.",
+        "command": "Remove-ADGroupMember -Identity 'Domain Admins' -Members jdoe"
+      },
+      {
+        "step": "Put every remaining tier 0 account in Protected Users and mark it sensitive and not delegatable.",
+        "command": "Add-ADGroupMember -Identity 'Protected Users' -Members jdoe-adm"
+      },
+      {
+        "step": "Restrict where tier 0 accounts can log on with authentication policy silos or logon restrictions, so a stolen tier 0 credential cannot be used on a workstation."
+      }
+    ],
+    "validation": "Get-ADGroupMember -Identity 'Domain Admins' -Recursive | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Removing an account that silently runs a scheduled task or service will break it. Audit what each account authenticates to for at least one business cycle before removal, and remove during a window where you can restore quickly.",
+    "effort": "High",
+    "lab": "Add a test user to Backup Operators only, then use the backup privilege to copy the NTDS database and SYSTEM hive off a lab DC. It demonstrates why that group is tier 0.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1078.002 - Domain Accounts",
+        "url": "https://attack.mitre.org/techniques/T1078/002/"
+      },
+      {
+        "title": "Microsoft Learn - Securing privileged access",
+        "url": "https://learn.microsoft.com/en-us/security/privileged-access-workstations/overview"
+      }
+    ],
+    "edges": [
+      "MemberOf"
+    ]
+  },
+  {
+    "id": "ADR-PRIV-002",
+    "title": "Privileged account is delegatable and not in Protected Users",
+    "category": "Privileged Access",
+    "severity": "High",
+    "summary": "A tier 0 account can have its credentials delegated. If it ever authenticates to a compromised or misconfigured host, that host can impersonate it.",
+    "howItWorks": "By default an account's tickets can be forwarded. Combined with any delegation misconfiguration elsewhere in the domain, that means a single admin logon to the wrong server hands over the account. Two controls close this: the sensitive-and-cannot-be-delegated flag stops the KDC from issuing forwardable tickets for the account, and Protected Users membership additionally blocks NTLM, blocks RC4 and DES, prevents credential caching, and shortens the ticket lifetime. Applying both means an unconstrained delegation host that captures other users' tickets simply gets nothing usable for these accounts.",
+    "attackChain": [
+      "Compromise a server configured for delegation, or coerce authentication to one",
+      "Wait for or trigger an administrator logon to that host",
+      "Extract the delegated ticket from memory",
+      "Reuse it against domain controllers"
+    ],
+    "mitre": [
+      "T1550.003",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Identify privileged accounts missing the protections.",
+        "command": "Get-ADUser -LDAPFilter '(admincount=1)' -Properties AccountNotDelegated,memberOf | Where-Object { -not $_.AccountNotDelegated }"
+      },
+      {
+        "step": "Set the sensitive flag on each one.",
+        "command": "Get-ADUser -LDAPFilter '(admincount=1)' | Set-ADAccountControl -AccountNotDelegated $true"
+      },
+      {
+        "step": "Add them to Protected Users, but stage it. The group blocks NTLM for its members, which breaks anything that is not Kerberos-capable.",
+        "command": "Add-ADGroupMember -Identity 'Protected Users' -Members jdoe-adm"
+      },
+      {
+        "step": "Test with one administrator for a full week before adding the rest, and confirm domain and forest functional levels are 2012 R2 or higher so the group takes effect."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(admincount=1)' -Properties AccountNotDelegated | Where-Object { -not $_.AccountNotDelegated } | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Protected Users blocks NTLM authentication and credential caching for its members. Administrators who rely on NTLM to legacy systems, or who log on to machines without connectivity to a DC, will be locked out of those paths.",
+    "effort": "Medium",
+    "lab": "Add an admin to Protected Users in a lab and attempt an NTLM authentication to a member server. The failure is the control working, and it is worth seeing before doing it in production.",
+    "references": [
+      {
+        "title": "Microsoft Learn - How to configure protected accounts",
+        "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/how-to-configure-protected-accounts"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PRIV-003",
+    "title": "Orphaned adminCount attribute with a broken inheritance chain",
+    "category": "Privileged Access",
+    "severity": "Medium",
+    "summary": "An object has adminCount set to 1 but is no longer in any protected group. Its ACL is still the restrictive AdminSDHolder template with inheritance disabled, which hides the object from normal delegation and makes real permission review harder.",
+    "howItWorks": "When an account joins a protected group, the SDProp process stamps adminCount=1, copies the AdminSDHolder security descriptor onto it, and disables inheritance. Removing the account from the group does not undo any of that. The result is a population of ordinary accounts carrying tier 0 ACLs and broken inheritance. It is not directly exploitable, but it distorts every permissions audit, causes helpdesk delegation to silently fail on those objects, and hides genuinely privileged accounts in the noise. It is also a reliable indicator that an account was privileged at some point, which is exactly the list an attacker wants.",
+    "attackChain": [
+      "Query for adminCount=1 to build a candidate list of currently or formerly privileged accounts",
+      "Target the stale ones, which are less monitored than current admins",
+      "Use them as a foothold or password-spray target"
+    ],
+    "mitre": [
+      "T1098",
+      "T1087.002"
+    ],
+    "remediation": [
+      {
+        "step": "Compare the adminCount population against actual current membership of protected groups.",
+        "command": "Get-ADObject -LDAPFilter '(admincount=1)' -Properties adminCount,memberOf,objectClass | Where-Object { $_.memberOf -notmatch 'Domain Admins|Enterprise Admins|Administrators|Schema Admins|Account Operators|Backup Operators|Server Operators|Print Operators' }"
+      },
+      {
+        "step": "Confirm the account is genuinely no longer privileged, then clear the attribute.",
+        "command": "Set-ADObject -Identity 'CN=Old Admin,OU=Users,DC=corp,DC=local' -Clear adminCount"
+      },
+      {
+        "step": "Re-enable inheritance on the object so normal delegation applies again.",
+        "command": "$acl = Get-Acl -Path 'AD:\\CN=Old Admin,OU=Users,DC=corp,DC=local'; $acl.SetAccessRuleProtection($false,$true); Set-Acl -Path 'AD:\\CN=Old Admin,OU=Users,DC=corp,DC=local' -AclObject $acl"
+      },
+      {
+        "step": "Review the AdminSDHolder object's own ACL while you are here. An attacker who adds themselves there gets that permission propagated onto every protected account automatically.",
+        "command": "(Get-Acl -Path 'AD:\\CN=AdminSDHolder,CN=System,DC=corp,DC=local').Access | Where-Object { $_.IdentityReference -notmatch 'Domain Admins|Enterprise Admins|Administrators|SYSTEM' }"
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(admincount=1)' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Very low. Re-enabling inheritance can grant delegated helpdesk permissions that were previously blocked, so verify the OU's delegation model is what you expect before doing it in bulk.",
+    "effort": "Low",
+    "lab": "Add a user to Domain Admins, wait for SDProp to run, remove them, and watch adminCount stay at 1 with inheritance still disabled.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1087.002 - Domain Account Discovery",
+        "url": "https://attack.mitre.org/techniques/T1087/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACCT-001",
+    "title": "Enabled account with a password set to never expire",
+    "category": "Account Hygiene",
+    "severity": "Medium",
+    "summary": "Accounts with DONT_EXPIRE_PASSWORD keep the same secret indefinitely. When one of them is privileged or has an SPN, it becomes the single most valuable cracking target in the domain.",
+    "howItWorks": "This flag by itself is not an attack. It matters because of what it correlates with: passwords chosen years ago, before the current complexity standard, that have had unlimited exposure to breach corpora and offline cracking. Combined with an SPN it means kerberoasting has effectively infinite time to succeed. Combined with privilege it means a single old password protects the domain. Modern password guidance has moved away from forced expiry for user accounts, so the fix is not simply to turn expiry back on: it is to make sure the password is long and random where it never changes.",
+    "attackChain": [
+      "Enumerate accounts with the flag, which is readable by any domain user",
+      "Cross-reference against breach corpora and password-spray the likely candidates",
+      "Use the recovered credential, which will still be valid because it never rotates"
+    ],
+    "mitre": [
+      "T1110.003",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Prioritise by risk rather than count. Privileged accounts and accounts with SPNs come first.",
+        "command": "Get-ADUser -LDAPFilter '(&(userAccountControl:1.2.840.113556.1.4.803:=65536)(!userAccountControl:1.2.840.113556.1.4.803:=2))' -Properties PasswordLastSet,servicePrincipalName,adminCount"
+      },
+      {
+        "step": "For human accounts, clear the flag and let normal policy apply.",
+        "command": "Set-ADUser -Identity jdoe -PasswordNeverExpires $false"
+      },
+      {
+        "step": "For service accounts that genuinely cannot rotate on a schedule, migrate to a gMSA so rotation becomes automatic.",
+        "command": "Install-ADServiceAccount -Identity gmsa-app01"
+      },
+      {
+        "step": "Where neither is possible, set a 25-character-plus random password now and record the account in an exception register with an owner and review date."
+      },
+      {
+        "step": "Deploy a banned-password list so newly set passwords cannot be drawn from breach corpora."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(&(userAccountControl:1.2.840.113556.1.4.803:=65536)(admincount=1))' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Clearing the flag on a service account starts an expiry clock that will eventually cause an unplanned outage. Reset the password to something long first, then decide whether expiry is appropriate.",
+    "effort": "Medium",
+    "lab": "Compare cracking time for an eight-character and a twenty-five-character kerberoasted ticket on the same hardware. The gap is the entire argument for length over rotation.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1110.003 - Password Spraying",
+        "url": "https://attack.mitre.org/techniques/T1110/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACCT-002",
+    "title": "Stale account still enabled",
+    "category": "Account Hygiene",
+    "severity": "Medium",
+    "summary": "An enabled account has not authenticated in months. Nobody notices when it is used, and its password is usually old and weak.",
+    "howItWorks": "Stale accounts are the preferred landing point for an attacker who has recovered a credential, because their use generates no complaints and no alerts. Nobody reports a lockout, nobody notices the logon time, and their password predates whatever policy improvement came later. Stale computer objects matter too: an unused machine account is a valid identity that can be reused, and its object may still carry delegation settings or ACLs that grant more than the dormant host ever needed.",
+    "attackChain": [
+      "Enumerate enabled accounts with an old lastLogonTimestamp",
+      "Password-spray them, since lockout complaints will not surface",
+      "Operate from an identity nobody is watching"
+    ],
+    "mitre": [
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Report on enabled accounts with no logon in the last 90 days. Use lastLogonTimestamp and remember it replicates lazily, so it can be up to 14 days behind.",
+        "command": "$cut = (Get-Date).AddDays(-90); Get-ADUser -Filter {Enabled -eq $true -and LastLogonTimeStamp -lt $cut} -Properties LastLogonTimeStamp,whenCreated,Description"
+      },
+      {
+        "step": "Disable rather than delete first, and move the object to a quarantine OU so it is easy to reverse.",
+        "command": "Disable-ADAccount -Identity jdoe; Move-ADObject -Identity 'CN=jdoe,OU=Users,DC=corp,DC=local' -TargetPath 'OU=Disabled,DC=corp,DC=local'"
+      },
+      {
+        "step": "Delete after a defined quarantine period, commonly 30 to 60 days, once no one has asked for it back."
+      },
+      {
+        "step": "Apply the same process to computer objects, which accumulate faster than user accounts.",
+        "command": "Get-ADComputer -Filter {Enabled -eq $true -and LastLogonTimeStamp -lt $cut} -Properties LastLogonTimeStamp,OperatingSystem"
+      },
+      {
+        "step": "Automate it. A joiner-mover-leaver process that reaches AD is the only durable fix; a one-off cleanup regrows within a year."
+      }
+    ],
+    "validation": "$cut = (Get-Date).AddDays(-90); (Get-ADUser -Filter {Enabled -eq $true -and LastLogonTimeStamp -lt $cut}).Count",
+    "breakRisk": "Seasonal staff, break-glass accounts, and service accounts that authenticate only during an annual process can look stale. Exclude documented break-glass accounts explicitly, and check with owners before disabling anything that looks like a service identity.",
+    "effort": "Medium",
+    "lab": "Compare the results of lastLogon (non-replicated, per DC) against lastLogonTimestamp (replicated, lazy). Knowing which attribute you are reading prevents disabling active accounts by mistake.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1078.002 - Domain Accounts",
+        "url": "https://attack.mitre.org/techniques/T1078/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACCT-003",
+    "title": "Account stores its password with reversible encryption",
+    "category": "Account Hygiene",
+    "severity": "High",
+    "summary": "The ENCRYPTED_TEXT_PWD_ALLOWED flag makes AD store a recoverable form of the password. Anyone who can read the directory database gets the plaintext, not a hash.",
+    "howItWorks": "Reversible encryption exists for legacy protocols such as CHAP and older IIS digest authentication. The stored value is encrypted with a key held in the directory itself, so recovery is trivial for anyone who can dump NTDS.dit or run a replication request. Cracking is not required. This flag can be set per account or, worse, applied to everyone through a Group Policy password policy setting, so check both.",
+    "attackChain": [
+      "Obtain directory replication rights or a copy of NTDS.dit",
+      "Extract the reversibly encrypted secrets",
+      "Decrypt them to plaintext and reuse the passwords directly, including against non-Windows systems where they were reused"
+    ],
+    "mitre": [
+      "T1003.003"
+    ],
+    "remediation": [
+      {
+        "step": "Find affected accounts.",
+        "command": "Get-ADUser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=128)' -Properties userAccountControl,Description"
+      },
+      {
+        "step": "Clear the flag on each one.",
+        "command": "Set-ADUser -Identity jdoe -AllowReversiblePasswordEncryption $false"
+      },
+      {
+        "step": "Force a password change, because the previously stored reversible copy remains until the password is reset.",
+        "command": "Set-ADUser -Identity jdoe -ChangePasswordAtLogon $true"
+      },
+      {
+        "step": "Check Group Policy for the domain-wide setting under Computer Configuration, Windows Settings, Security Settings, Account Policies, Password Policy, and confirm it is disabled."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=128)' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "A legacy application using CHAP or digest authentication will stop working. These are rare and should be replaced rather than accommodated, but identify the consumer before clearing the flag.",
+    "effort": "Low",
+    "lab": "Set the flag on a lab account, reset its password, then dump the directory and observe that the plaintext comes back without any cracking step.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1003.003 - NTDS",
+        "url": "https://attack.mitre.org/techniques/T1003/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACCT-004",
+    "title": "Account with the password-not-required flag",
+    "category": "Account Hygiene",
+    "severity": "High",
+    "summary": "PASSWD_NOTREQD lets the account keep an empty password regardless of the domain password policy.",
+    "howItWorks": "The flag exempts the account from minimum length enforcement. It does not mean the password is currently blank, but it means it can be set blank, and in older environments some of them are. Domain password policy will not catch it because the check is bypassed at the point the password is set. These accounts are frequently created by migration tools and legacy provisioning scripts, then left enabled for years.",
+    "attackChain": [
+      "Enumerate accounts with the flag",
+      "Attempt authentication with an empty password",
+      "Where that fails, treat them as weak-password candidates for spraying since policy was never enforced"
+    ],
+    "mitre": [
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate the affected accounts.",
+        "command": "Get-ADUser -LDAPFilter '(userAccountControl:1.2.840.113556.1.4.803:=32)' -Properties userAccountControl,PasswordLastSet,Enabled"
+      },
+      {
+        "step": "Clear the flag.",
+        "command": "Set-ADUser -Identity svc-legacy -PasswordNotRequired $false"
+      },
+      {
+        "step": "Reset the password immediately afterwards so a currently blank or short password is replaced under enforced policy.",
+        "command": "Reset-ADAccountPassword -Identity svc-legacy -Reset"
+      },
+      {
+        "step": "Disable any affected account that is also stale rather than remediating it."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(&(userAccountControl:1.2.840.113556.1.4.803:=32)(!userAccountControl:1.2.840.113556.1.4.803:=2))' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Resetting a service account password without coordinating the service restart causes an outage. Clear the flag and reset in the same maintenance window.",
+    "effort": "Low",
+    "lab": "Create an account with the flag set and a blank password in a lab, then try to authenticate. Clear the flag and attempt to set a blank password again to see policy enforcement return.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1078.002 - Domain Accounts",
+        "url": "https://attack.mitre.org/techniques/T1078/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-DOM-001",
+    "title": "Machine account quota allows any user to join computers",
+    "category": "Domain Configuration",
+    "severity": "High",
+    "summary": "ms-DS-MachineAccountQuota is greater than zero, so every authenticated user can create computer accounts. Several privilege escalation paths depend on exactly that ability.",
+    "howItWorks": "The default of 10 dates from an era when self-service domain join was the goal. Today it is a prerequisite for a family of attacks. Resource-based constrained delegation abuse needs a machine account the attacker controls. Certificate template abuse often needs one. The created account is owned by its creator, who gets write access to several of its attributes including its SPNs and DNS host name. Setting the quota to zero removes an entire category of escalation without affecting anything that uses a proper domain-join process, because delegated join rights are granted separately.",
+    "attackChain": [
+      "Create a machine account as any authenticated user",
+      "Use it as the impersonating principal for RBCD against a target computer",
+      "Request a service ticket as a local administrator on that target",
+      "Move laterally with full local administrator rights"
+    ],
+    "mitre": [
+      "T1136.002",
+      "T1098"
+    ],
+    "remediation": [
+      {
+        "step": "Read the current value.",
+        "command": "Get-ADObject -Identity (Get-ADDomain).DistinguishedName -Properties 'ms-DS-MachineAccountQuota'"
+      },
+      {
+        "step": "Set it to zero.",
+        "command": "Set-ADDomain -Identity (Get-ADDomain).DistinguishedName -Replace @{'ms-DS-MachineAccountQuota'=0}"
+      },
+      {
+        "step": "Delegate the create-computer-object right on the specific OUs where machines are staged, to the specific service account or group that performs domain joins.",
+        "command": "dsacls 'OU=Workstations,DC=corp,DC=local' /I:T /G 'CORP\\svc-domainjoin:CC;computer'"
+      },
+      {
+        "step": "Check the SeMachineAccountPrivilege user right assignment in Group Policy too, since it is a separate control that can grant the same ability."
+      }
+    ],
+    "validation": "(Get-ADObject -Identity (Get-ADDomain).DistinguishedName -Properties 'ms-DS-MachineAccountQuota').'ms-DS-MachineAccountQuota'",
+    "breakRisk": "Any workflow relying on ordinary users joining their own machines, including some Autopilot and imaging processes, will fail until join rights are delegated properly. Delegate first, then set the quota to zero.",
+    "effort": "Low",
+    "lab": "As an unprivileged lab user, create a machine account and confirm it succeeds. Set the quota to zero and watch the same command fail.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1136.002 - Create Domain Account",
+        "url": "https://attack.mitre.org/techniques/T1136/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-DOM-002",
+    "title": "Weak domain password or lockout policy",
+    "category": "Domain Configuration",
+    "severity": "Medium",
+    "summary": "The default domain policy allows short passwords, or has no lockout threshold, which makes online guessing and spraying practical.",
+    "howItWorks": "Password length is the dominant factor in offline cracking cost, and lockout is the only thing that limits online guessing. A domain with a seven or eight character minimum has an effective password population small enough to brute force offline once any hash is obtained. A domain with no lockout threshold lets an attacker try every account against a handful of seasonal passwords without ever being stopped. Modern guidance favours longer minimums with a banned-password list over aggressive complexity and forced rotation, which mostly produce predictable patterns.",
+    "attackChain": [
+      "Read the policy anonymously or as any user",
+      "Spray a small set of likely passwords across all accounts, staying under any lockout threshold",
+      "Recover a foothold credential and repeat from inside"
+    ],
+    "mitre": [
+      "T1110.003"
+    ],
+    "remediation": [
+      {
+        "step": "Read the effective policy, including any fine-grained password policies that override the default.",
+        "command": "Get-ADDefaultDomainPasswordPolicy; Get-ADFineGrainedPasswordPolicy -Filter *"
+      },
+      {
+        "step": "Raise the minimum length to at least 14 characters for users and require far longer for service accounts.",
+        "command": "Set-ADDefaultDomainPasswordPolicy -Identity corp.local -MinPasswordLength 14"
+      },
+      {
+        "step": "Set a lockout threshold with a short observation window, which stops spraying without generating a denial-of-service opportunity.",
+        "command": "Set-ADDefaultDomainPasswordPolicy -Identity corp.local -LockoutThreshold 10 -LockoutObservationWindow 00:15:00 -LockoutDuration 00:15:00"
+      },
+      {
+        "step": "Use fine-grained password policies to apply stricter requirements to privileged and service accounts without changing the whole domain.",
+        "command": "New-ADFineGrainedPasswordPolicy -Name 'Tier0-Policy' -Precedence 10 -MinPasswordLength 25 -ComplexityEnabled $true"
+      },
+      {
+        "step": "Add a banned-password list so users cannot pick seasonal or company-name passwords that meet the length rule but fail in practice."
+      }
+    ],
+    "validation": "Get-ADDefaultDomainPasswordPolicy | Select-Object MinPasswordLength,LockoutThreshold,LockoutObservationWindow,ComplexityEnabled",
+    "breakRisk": "A lockout threshold introduces a denial-of-service path where an attacker can lock accounts deliberately. A short observation window keeps that manageable. Raising minimum length forces a change cycle, so communicate it before enforcing.",
+    "effort": "Low",
+    "lab": "Run a controlled spray against a lab domain with no lockout threshold, then set one and repeat to see where the attempts stop.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1110.003 - Password Spraying",
+        "url": "https://attack.mitre.org/techniques/T1110/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-DOM-003",
+    "title": "Pre-Windows 2000 Compatible Access contains a broad identity",
+    "category": "Domain Configuration",
+    "severity": "Medium",
+    "summary": "The group contains Everyone or Anonymous Logon, which grants read access to directory objects to unauthenticated callers.",
+    "howItWorks": "This group exists for Windows NT era compatibility and grants read permissions across user and group objects. When it contains Anonymous Logon or Everyone, an unauthenticated attacker who can reach LDAP or SMB can enumerate users, groups, and attributes with no credentials at all. That turns reconnaissance from a post-compromise step into a pre-compromise one: username lists for spraying, group membership for target selection, and description fields that occasionally contain passwords.",
+    "attackChain": [
+      "Connect to LDAP or SMB with a null session from an unauthenticated position",
+      "Enumerate the full user and group list plus attributes",
+      "Build a target list for AS-REP roasting and password spraying"
+    ],
+    "mitre": [
+      "T1087.002",
+      "T1135"
+    ],
+    "remediation": [
+      {
+        "step": "Inspect the group's membership.",
+        "command": "Get-ADGroupMember -Identity 'Pre-Windows 2000 Compatible Access'"
+      },
+      {
+        "step": "Remove Everyone and Anonymous Logon. Authenticated Users membership is the supported configuration for modern domains.",
+        "command": "Remove-ADGroupMember -Identity 'Pre-Windows 2000 Compatible Access' -Members 'Everyone'"
+      },
+      {
+        "step": "Check the dsHeuristics attribute for the character that re-enables anonymous LDAP operations, and clear it if set.",
+        "command": "Get-ADObject -Identity \"CN=Directory Service,CN=Windows NT,CN=Services,$((Get-ADRootDSE).configurationNamingContext)\" -Properties dsHeuristics"
+      },
+      {
+        "step": "Set the RestrictAnonymous and RestrictAnonymousSAM security options through Group Policy so null sessions cannot enumerate SAM accounts and shares."
+      }
+    ],
+    "validation": "Get-ADGroupMember -Identity 'Pre-Windows 2000 Compatible Access' | Select-Object Name,SID",
+    "breakRisk": "Genuinely ancient applications and some network appliances read the directory anonymously. Removing the broad identity will break them, so identify anonymous LDAP consumers in your logs first.",
+    "effort": "Low",
+    "lab": "Run an anonymous LDAP query against your lab domain before and after the change to see the enumeration surface disappear.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1087.002 - Domain Account Discovery",
+        "url": "https://attack.mitre.org/techniques/T1087/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-HOST-001",
+    "title": "Enabled computer running an unsupported operating system",
+    "category": "Host Posture",
+    "severity": "High",
+    "summary": "A domain-joined host runs an OS that no longer receives security updates. It is a permanent unpatched foothold inside the authentication boundary.",
+    "howItWorks": "An end-of-life host does not just risk its own compromise. It is a domain member, so it holds cached credentials, it participates in Kerberos, and it is trusted by the rest of the estate. Older Windows versions also lack the defensive features the rest of your controls assume: no credential guard, weaker LSA protection, SMBv1 often enabled, and no support for modern authentication policies. One unpatched 2008 R2 server can undo an otherwise well-hardened domain.",
+    "attackChain": [
+      "Identify unsupported systems from the operatingSystem attribute, readable by any domain user",
+      "Exploit a known unpatched remote code execution vulnerability",
+      "Harvest cached credentials and machine account material from the host",
+      "Pivot with those credentials to systems that are patched"
+    ],
+    "mitre": [
+      "T1210",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Inventory by operating system and confirm each host is actually alive rather than a stale object.",
+        "command": "Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem,OperatingSystemVersion,LastLogonDate | Group-Object OperatingSystem | Sort-Object Count -Descending"
+      },
+      {
+        "step": "For each live host, decide upgrade, replace, or isolate. Isolation means removing it from the domain where possible, or at minimum firewalling it to only the ports its application needs."
+      },
+      {
+        "step": "Where the host must stay, restrict which accounts may log on to it so no privileged credential is ever cached there.",
+        "command": "Get-ADComputer LEGACY01 | Set-ADObject -Replace @{'msDS-AllowedToActOnBehalfOfOtherIdentity'=$null}"
+      },
+      {
+        "step": "Disable SMBv1 and enforce SMB signing across the estate, which limits what an attacker can do from a legacy host.",
+        "command": "Get-WindowsOptionalFeature -Online -FeatureName SMB1Protocol"
+      },
+      {
+        "step": "Set a decommission date with a named owner. Legacy hosts persist because nobody owns the retirement."
+      }
+    ],
+    "validation": "Get-ADComputer -Filter {Enabled -eq $true} -Properties OperatingSystem | Where-Object { $_.OperatingSystem -match '2003|2008|Windows 7|Windows XP|Windows 8' } | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "The application on the host is usually the reason it still exists. Isolation is often achievable in a week when replacement would take a year, so treat isolation as the interim control rather than waiting for the project.",
+    "effort": "High",
+    "lab": "Stand up a legacy host in a lab, dump cached credentials from it, and use them against a fully patched member server to see why the weakest host sets the domain's floor.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1210 - Exploitation of Remote Services",
+        "url": "https://attack.mitre.org/techniques/T1210/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-HOST-002",
+    "title": "Domain-joined computer without a managed local administrator password",
+    "category": "Host Posture",
+    "severity": "High",
+    "summary": "No LAPS password expiration attribute is present on the computer object, which usually means the local administrator password is shared across machines.",
+    "howItWorks": "A shared local administrator password turns one compromised workstation into all of them. The attacker dumps the local SAM, gets the administrator hash, and passes it to every other host that was imaged the same way, without ever needing a domain credential. LAPS breaks that by setting a unique random password per machine, stored on the computer object in AD and readable only by principals you authorise. Windows LAPS is built into current Windows versions and stores the password in msLAPS-PasswordExpirationTime and related attributes; the legacy version uses ms-Mcs-AdmPwd. Either one solves the problem, but the read permissions on those attributes must also be tight, because anyone who can read them holds local administrator on those machines.",
+    "attackChain": [
+      "Compromise one workstation and dump the local SAM database",
+      "Recover the local administrator hash",
+      "Pass the hash to every other host in the same image lineage",
+      "Harvest domain credentials from whichever machine an administrator has used"
+    ],
+    "mitre": [
+      "T1550.002",
+      "T1078.003"
+    ],
+    "remediation": [
+      {
+        "step": "Measure coverage rather than assuming it. Check both the modern and legacy attributes.",
+        "command": "Get-ADComputer -Filter {Enabled -eq $true} -Properties 'msLAPS-PasswordExpirationTime','ms-Mcs-AdmPwdExpirationTime' | Where-Object { -not $_.'msLAPS-PasswordExpirationTime' -and -not $_.'ms-Mcs-AdmPwdExpirationTime' }"
+      },
+      {
+        "step": "Deploy Windows LAPS by extending the schema and configuring the policy, then confirm clients start populating the attribute.",
+        "command": "Update-LapsADSchema; Set-LapsADComputerSelfPermission -Identity 'OU=Workstations,DC=corp,DC=local'"
+      },
+      {
+        "step": "Restrict who can read the password attribute, and audit that permission as carefully as any tier 0 group.",
+        "command": "Find-LapsADExtendedRights -Identity 'OU=Workstations,DC=corp,DC=local'"
+      },
+      {
+        "step": "Enable password history and post-authentication reset so the password rotates after each administrative use."
+      },
+      {
+        "step": "Once coverage is confirmed, disable or rename the built-in administrator account on hosts that do not need it, and confirm no other shared local accounts exist."
+      }
+    ],
+    "validation": "Get-ADComputer -Filter {Enabled -eq $true} -Properties 'msLAPS-PasswordExpirationTime' | Where-Object { -not $_.'msLAPS-PasswordExpirationTime' } | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Support processes and imaging scripts that rely on a known local password will break. Give the service desk a documented way to retrieve the LAPS password before enforcing rotation.",
+    "effort": "Medium",
+    "lab": "Image two lab machines with the same local administrator password, dump the hash from one, and authenticate to the other with it. Deploy LAPS and repeat.",
+    "references": [
+      {
+        "title": "Microsoft Learn - Windows LAPS overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview"
+      },
+      {
+        "title": "MITRE ATT&CK T1550.002 - Pass the Hash",
+        "url": "https://attack.mitre.org/techniques/T1550/002/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-CERT-001",
+    "title": "Certificate template allows the requester to supply the subject",
+    "category": "Certificate Services",
+    "severity": "Critical",
+    "summary": "An AD CS template permits enrollee-supplied subject names, includes a client authentication EKU, and does not require manager approval. Anyone who can enrol can request a certificate naming someone else.",
+    "howItWorks": "When a template sets the enrollee-supplies-subject flag, the requester chooses the identity in the certificate rather than having the CA derive it from the directory. If the template also allows client authentication and issues without manager approval or authorised signatures, a low-privileged user who has enrolment rights can request a certificate in the name of a domain administrator and then use it to authenticate. Certificates typically remain valid for a year or more, so this is also a persistence mechanism that survives password resets. The combination of flags is what makes it dangerous; each one alone is normal.",
+    "attackChain": [
+      "Enumerate published templates and their enrolment rights, readable by any domain user",
+      "Find one that allows enrollee-supplied subject with client authentication and automatic issuance",
+      "Request a certificate specifying a privileged account as the subject alternative name",
+      "Authenticate to the domain with that certificate and act as the named account"
+    ],
+    "mitre": [
+      "T1649",
+      "T1550"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate templates and check the name flags and enrolment permissions together.",
+        "command": "Get-ADObject -SearchBase \"CN=Certificate Templates,CN=Public Key Services,CN=Services,$((Get-ADRootDSE).configurationNamingContext)\" -LDAPFilter '(objectClass=pKICertificateTemplate)' -Properties msPKI-Certificate-Name-Flag,msPKI-Enrollment-Flag,pKIExtendedKeyUsage,nTSecurityDescriptor"
+      },
+      {
+        "step": "Remove the enrollee-supplies-subject flag on any template that also issues client authentication certificates. Build the subject from Active Directory instead."
+      },
+      {
+        "step": "Where the template must allow a supplied subject, require manager approval or an authorised signature so issuance is not automatic."
+      },
+      {
+        "step": "Restrict enrolment rights to the specific group that needs the certificate, and remove broad principals such as Domain Users, Domain Computers, and Authenticated Users."
+      },
+      {
+        "step": "Unpublish templates nobody uses. An unused template with a dangerous configuration is still enrollable.",
+        "command": "certutil -dCA -template"
+      },
+      {
+        "step": "Apply the strong certificate mapping requirements from Microsoft's KB5014754 guidance so certificates must map to accounts by a strong identifier."
+      }
+    ],
+    "validation": "Get-ADObject -SearchBase \"CN=Certificate Templates,CN=Public Key Services,CN=Services,$((Get-ADRootDSE).configurationNamingContext)\" -LDAPFilter '(&(objectClass=pKICertificateTemplate)(msPKI-Certificate-Name-Flag:1.2.840.113556.1.4.803:=1))' -Properties cn",
+    "breakRisk": "Certificate enrolment for the affected use case stops until the template is corrected, which can interrupt VPN, wifi, or smart card issuance. Duplicate the template, fix the copy, migrate consumers, then unpublish the original.",
+    "effort": "Medium",
+    "lab": "Build a lab CA, publish a template with these three settings, and request a certificate for a domain admin as an unprivileged user. Then fix each setting in turn to see which one closes the path.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1649 - Steal or Forge Authentication Certificates",
+        "url": "https://attack.mitre.org/techniques/T1649/"
+      },
+      {
+        "title": "Microsoft Support - KB5014754 certificate-based authentication changes",
+        "url": "https://support.microsoft.com/help/5014754"
+      }
+    ],
+    "edges": [
+      "ADCSESC1"
+    ]
+  },
+  {
+    "id": "ADR-TRUST-001",
+    "title": "Trust relationship without SID filtering",
+    "category": "Trusts",
+    "severity": "High",
+    "summary": "A trust has SID filtering disabled or SID history enabled, so principals from the trusted domain can present SIDs from your domain and be granted the matching access.",
+    "howItWorks": "SID filtering makes a domain discard SIDs in an incoming authentication that do not belong to the trusted domain. Without it, an attacker who controls the trusted side can add your Enterprise Admins SID to the SID history of an account there, authenticate across the trust, and be treated as a member of that group. This is why trust direction and filtering matter more than most other settings: the security of your forest becomes the security of the least defended domain you trust. Intra-forest trusts are treated as one security boundary by design, which is why a compromised child domain means a compromised forest.",
+    "attackChain": [
+      "Compromise a domain on the trusted side of the relationship",
+      "Inject a privileged SID from the trusting domain into an account's SID history",
+      "Authenticate across the trust",
+      "Receive the privileges of the injected group in the trusting domain"
+    ],
+    "mitre": [
+      "T1134.005",
+      "T1482"
+    ],
+    "remediation": [
+      {
+        "step": "Inventory every trust with its direction, type, and attribute flags.",
+        "command": "Get-ADTrust -Filter * | Select-Object Name,Direction,TrustType,SIDFilteringForestAware,SIDFilteringQuarantined,SelectiveAuthentication"
+      },
+      {
+        "step": "Enable SID filtering, called quarantine, on external trusts.",
+        "command": "netdom trust corp.local /domain:partner.local /quarantine:yes"
+      },
+      {
+        "step": "Enable selective authentication on external and forest trusts so principals must be explicitly granted the allowed-to-authenticate right on each resource.",
+        "command": "netdom trust corp.local /domain:partner.local /selectivauth:yes"
+      },
+      {
+        "step": "Delete trusts that are no longer needed. Old partner and acquisition trusts long outlive the relationship.",
+        "command": "Remove-ADObject -Identity (Get-ADTrust -Identity partner.local).DistinguishedName"
+      },
+      {
+        "step": "Remember that within a forest the forest is the security boundary, not the domain. A child domain administrator can reach the forest root, so treat every domain in the forest as tier 0."
+      }
+    ],
+    "validation": "Get-ADTrust -Filter * | Select-Object Name,Direction,SIDFilteringQuarantined,SelectiveAuthentication",
+    "breakRisk": "Selective authentication will block cross-trust access until resources are explicitly granted the allowed-to-authenticate right, which can be disruptive. Enable it on a pilot resource set first and inventory who actually authenticates across the trust.",
+    "effort": "Medium",
+    "lab": "Build two lab forests with a trust, inject a SID history value on the trusted side, and observe the access granted. Enable quarantine and repeat.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1134.005 - SID-History Injection",
+        "url": "https://attack.mitre.org/techniques/T1134/005/"
+      },
+      {
+        "title": "MITRE ATT&CK T1482 - Domain Trust Discovery",
+        "url": "https://attack.mitre.org/techniques/T1482/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-GPO-001",
+    "title": "Credentials stored in Group Policy Preferences in SYSVOL",
+    "category": "Group Policy",
+    "severity": "Critical",
+    "summary": "A Group Policy Preferences file in SYSVOL contains a cpassword value. The decryption key is public, and every domain user can read SYSVOL.",
+    "howItWorks": "Group Policy Preferences could set local account passwords, map drives, and configure scheduled tasks with stored credentials. The password is AES encrypted, but Microsoft published the key in the protocol documentation, so the encryption provides no protection. Every authenticated user can read SYSVOL, which means every user in the domain can recover any password stored this way. Microsoft removed the ability to create these in 2014, but existing files persist through migrations and upgrades and are still found in mature environments. The recovered credential is frequently a local administrator password deployed to every workstation.",
+    "attackChain": [
+      "Read the SYSVOL share as any authenticated domain user",
+      "Search policy XML files for cpassword attributes",
+      "Decrypt with the published key",
+      "Use the credential, which is usually a widely deployed local administrator account"
+    ],
+    "mitre": [
+      "T1552.006"
+    ],
+    "remediation": [
+      {
+        "step": "Search SYSVOL for affected files across all policy preference types.",
+        "command": "Get-ChildItem -Path \"\\\\$env:USERDNSDOMAIN\\SYSVOL\\$env:USERDNSDOMAIN\\Policies\" -Recurse -Include *.xml -ErrorAction SilentlyContinue | Select-String -Pattern 'cpassword' | Select-Object Path"
+      },
+      {
+        "step": "Treat every credential found as compromised and rotate it immediately, wherever it is used, before deleting anything."
+      },
+      {
+        "step": "Remove the preference item from the GPO through the Group Policy Management Console rather than deleting the file directly, so the policy stays consistent."
+      },
+      {
+        "step": "Replace local administrator password management with LAPS, which is the supported answer to what these files were doing."
+      },
+      {
+        "step": "Check backups and any archived copies of SYSVOL, since the files may persist there after the live copy is cleaned."
+      }
+    ],
+    "validation": "Get-ChildItem -Path \"\\\\$env:USERDNSDOMAIN\\SYSVOL\\$env:USERDNSDOMAIN\\Policies\" -Recurse -Include *.xml -ErrorAction SilentlyContinue | Select-String -Pattern 'cpassword' | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Removing the preference item stops whatever it was configuring, such as a mapped drive or a scheduled task. Identify what each item does and provide the replacement before removal.",
+    "effort": "Low",
+    "lab": "Recover a cpassword value from a lab GPO and decrypt it with the published key to see how little the encryption is worth.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1552.006 - Group Policy Preferences",
+        "url": "https://attack.mitre.org/techniques/T1552/006/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-001",
+    "title": "GenericAll over a principal or object",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "GenericAll",
+      "AllExtendedRights"
+    ],
+    "summary": "Full control over an object. Whoever holds this can do anything the object's owner could, including everything the narrower edges allow.",
+    "howItWorks": "GenericAll is the superset edge: it grants every other ACL abuse at once. Over a user it means resetting the password, writing an SPN for a targeted kerberoast, or adding a key credential to authenticate as them without touching their password. Over a group it means adding yourself as a member. Over a computer it means configuring RBCD or reading LAPS. Over the domain object it means granting yourself replication rights and running DCSync. BloodHound draws it as one edge, but treat it as the whole family, because the fix is the same regardless of which technique the attacker picks.",
+    "attackChain": [
+      "Find the edge from a principal you control to a higher-value target",
+      "Pick whichever primitive the target type allows: password reset, group add, RBCD, shadow credentials",
+      "Authenticate as the target or as a member of it",
+      "Repeat along the graph until the path reaches tier 0"
+    ],
+    "mitre": [
+      "T1222.001",
+      "T1098"
+    ],
+    "remediation": [
+      {
+        "step": "Identify the exact ACE and whether it is inherited from a parent container or set directly on the object. Inherited entries usually mean an OU-level delegation that is granting far more than intended.",
+        "command": "(Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'GenericAll' } | Select-Object IdentityReference,IsInherited,InheritanceType"
+      },
+      {
+        "step": "Confirm with the owner what the principal actually needs to do. Almost every case turns out to need one specific right, not full control."
+      },
+      {
+        "step": "Remove the ACE.",
+        "command": "$acl = Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local'; $rule = $acl.Access | Where-Object { $_.IdentityReference -eq 'CORP\\Helpdesk' -and $_.ActiveDirectoryRights -match 'GenericAll' }; $rule | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }; Set-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local' -AclObject $acl"
+      },
+      {
+        "step": "Replace it with the specific right that was needed, scoped to the specific OU. Delegating the password reset extended right is very different from delegating full control.",
+        "command": "dsacls 'OU=Staff,DC=corp,DC=local' /I:S /G 'CORP\\Helpdesk:CA;Reset Password;user'"
+      },
+      {
+        "step": "If the ACE was inherited, fix it at the container rather than the object, or every new object in that OU will inherit the same problem."
+      }
+    ],
+    "validation": "(Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'GenericAll' } | Select-Object IdentityReference",
+    "breakRisk": "Helpdesk and automation accounts frequently depend on delegated rights nobody documented. Removing the ACE without granting the narrower replacement first will break password resets, provisioning scripts, or group management. Grant the specific right, confirm the workflow still works, then remove the broad one.",
+    "effort": "Medium",
+    "lab": "Grant a test user GenericAll over another user, then perform three different abuses with it: reset the password, write an SPN and roast it, and add a key credential. Seeing one edge produce three techniques is the point.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1222.001 - Windows File and Directory Permissions Modification",
+        "url": "https://attack.mitre.org/techniques/T1222/001/"
+      },
+      {
+        "title": "MITRE ATT&CK T1098 - Account Manipulation",
+        "url": "https://attack.mitre.org/techniques/T1098/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-002",
+    "title": "GenericWrite over a principal or object",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "GenericWrite",
+      "WriteProperty"
+    ],
+    "summary": "Write access to the object's attributes. Not full control, but several individual attributes are enough on their own to take the object over.",
+    "howItWorks": "GenericWrite does not let you reset a password, which makes it look weaker than it is. What it does let you write is the attribute set, and three attributes matter. Writing servicePrincipalName makes the account kerberoastable on demand, so you request a ticket and crack it offline. Writing msDS-KeyCredentialLink adds a certificate you control and lets you authenticate as the account without knowing the password at all. Over a computer, writing msDS-AllowedToActOnBehalfOfOtherIdentity configures RBCD and hands you local administrator. Over a group, writing the member attribute adds you to it. The attribute the attacker picks depends on the object type, but the outcome is the same.",
+    "attackChain": [
+      "Locate a GenericWrite edge to a user, computer, or group",
+      "For a user, add an SPN and kerberoast, or add a key credential and authenticate directly",
+      "For a computer, write the RBCD attribute and request a ticket as a local administrator",
+      "For a group, write the member attribute and inherit the group's access"
+    ],
+    "mitre": [
+      "T1098",
+      "T1558.003"
+    ],
+    "remediation": [
+      {
+        "step": "Find the ACE and note whether it is a blanket write or scoped to a property set.",
+        "command": "(Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'WriteProperty|GenericWrite' } | Select-Object IdentityReference,ObjectType,IsInherited"
+      },
+      {
+        "step": "Remove the ACE, then re-delegate only the attributes the workflow needs. Property-level delegation is supported and is what these tasks should have used.",
+        "command": "dsacls 'OU=Staff,DC=corp,DC=local' /I:S /G 'CORP\\HRSync:WP;telephoneNumber;user'"
+      },
+      {
+        "step": "Audit the three high-value attributes across the domain to see who else can write them, since this rarely affects only one object.",
+        "command": "Get-ADObject -LDAPFilter '(objectClass=user)' -Properties msDS-KeyCredentialLink | Where-Object { $_.'msDS-KeyCredentialLink' }"
+      },
+      {
+        "step": "Enable auditing on directory service object changes so future writes to servicePrincipalName and msDS-KeyCredentialLink generate event 5136."
+      }
+    ],
+    "validation": "(Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'GenericWrite' } | Select-Object IdentityReference",
+    "breakRisk": "HR sync tools and identity management platforms legitimately write user attributes. Determine which attributes the tool writes before narrowing, or the sync will start failing silently on the fields you did not delegate.",
+    "effort": "Medium",
+    "lab": "With GenericWrite over a lab user, add an SPN, request the ticket, then remove the SPN again. The account looks unchanged afterward, which is why this is hard to spot without attribute-level auditing.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1558.003 - Kerberoasting",
+        "url": "https://attack.mitre.org/techniques/T1558/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-003",
+    "title": "WriteDacl over an object",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "WriteDacl"
+    ],
+    "summary": "Permission to rewrite the object's permissions. The holder can grant themselves anything else, so this is equivalent to full control with one extra step.",
+    "howItWorks": "WriteDacl is the self-escalating edge. The holder cannot read the password or add a member directly, but they can write a new access control entry granting themselves GenericAll, and then do all of it. On the domain object, that includes granting themselves the replication extended rights and immediately running DCSync. Because the escalation is a legitimate permission change, it survives most cleanup: an attacker who adds a discreet ACE keeps access long after their account is disabled, which is why remediation has to include checking what the ACE holder already granted themselves.",
+    "attackChain": [
+      "Locate WriteDacl to a high-value object, often the domain head or a privileged group",
+      "Add an ACE granting the attacker-controlled principal full control",
+      "Use the new permission to dump credentials or add group members",
+      "Leave the added ACE in place as persistence"
+    ],
+    "mitre": [
+      "T1222.001",
+      "T1098"
+    ],
+    "remediation": [
+      {
+        "step": "Before removing anything, enumerate what the holder may have already granted. The original edge is often no longer the live problem.",
+        "command": "(Get-Acl -Path 'AD:\\DC=corp,DC=local').Access | Where-Object { -not $_.IsInherited } | Select-Object IdentityReference,ActiveDirectoryRights,ObjectType | Sort-Object IdentityReference"
+      },
+      {
+        "step": "Remove the WriteDacl ACE and any additional ACEs that trace back to it.",
+        "command": "$acl = Get-Acl -Path 'AD:\\DC=corp,DC=local'; $acl.Access | Where-Object { $_.IdentityReference -eq 'CORP\\svc-app' } | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }; Set-Acl -Path 'AD:\\DC=corp,DC=local' -AclObject $acl"
+      },
+      {
+        "step": "Compare the object's current DACL against a known-good baseline or a peer object, since additions are easy to miss by eye.",
+        "command": "Compare-Object (Get-Acl 'AD:\\CN=Group A,OU=Groups,DC=corp,DC=local').Access (Get-Acl 'AD:\\CN=Group B,OU=Groups,DC=corp,DC=local').Access -Property IdentityReference,ActiveDirectoryRights"
+      },
+      {
+        "step": "Treat any WriteDacl on the domain object, AdminSDHolder, or a tier 0 group as a suspected compromise, not just a misconfiguration, and check event 5136 for when it was added and by whom."
+      }
+    ],
+    "validation": "(Get-Acl -Path 'AD:\\DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'WriteDacl|WriteOwner' -and -not $_.IsInherited } | Select-Object IdentityReference,ActiveDirectoryRights",
+    "breakRisk": "Backup and directory management products sometimes hold WriteDacl legitimately. Confirm the product's documented requirement before removing, and prefer scoping it to the specific OUs it manages.",
+    "effort": "Medium",
+    "lab": "Grant WriteDacl over a lab group to an unprivileged user, then have that user grant themselves GenericAll and add themselves as a member. Note how ordinary the resulting ACL looks afterwards.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1222.001 - Windows File and Directory Permissions Modification",
+        "url": "https://attack.mitre.org/techniques/T1222/001/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-004",
+    "title": "WriteOwner or ownership of an object",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "WriteOwner",
+      "Owns",
+      "WriteOwnerLimitedRights"
+    ],
+    "summary": "The ability to take ownership, or already being the owner. An owner can always rewrite the object's permissions regardless of what the DACL currently says.",
+    "howItWorks": "Ownership sits above the DACL. The owner implicitly holds WRITE_DAC, so even an object whose permissions look clean is fully controlled by whoever owns it. Attackers use WriteOwner to set themselves as owner, then rewrite the DACL, then abuse whatever the object type allows. Unexpected ownership usually comes from history rather than attack: whoever created the object became its owner, so objects created by a departed administrator or a migration account still carry that account as owner years later. Creator ownership is the single most overlooked source of these edges.",
+    "attackChain": [
+      "Set the attacker-controlled principal as owner of the target",
+      "Use implicit owner rights to write a new DACL",
+      "Grant full control and abuse the object",
+      "Optionally restore the original owner to hide the change"
+    ],
+    "mitre": [
+      "T1222.001"
+    ],
+    "remediation": [
+      {
+        "step": "Audit ownership across privileged objects. Anything not owned by Domain Admins, Enterprise Admins, or Administrators deserves an explanation.",
+        "command": "Get-ADObject -LDAPFilter '(|(objectClass=group)(objectClass=user))' -SearchBase 'OU=Admin,DC=corp,DC=local' | ForEach-Object { [pscustomobject]@{ Name = $_.Name; Owner = (Get-Acl \"AD:\\$($_.DistinguishedName)\").Owner } }"
+      },
+      {
+        "step": "Reset ownership to the appropriate administrative group.",
+        "command": "$acl = Get-Acl -Path 'AD:\\CN=Target,OU=Groups,DC=corp,DC=local'; $acl.SetOwner([System.Security.Principal.NTAccount]'CORP\\Domain Admins'); Set-Acl -Path 'AD:\\CN=Target,OU=Groups,DC=corp,DC=local' -AclObject $acl"
+      },
+      {
+        "step": "Remove any WriteOwner ACEs held by non-tier-0 principals."
+      },
+      {
+        "step": "Set the default owner for newly created objects by having provisioning run as a service account whose objects you then reassign, or by auditing ownership on a schedule. New objects will otherwise keep reintroducing this."
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(objectClass=group)' -SearchBase 'OU=Admin,DC=corp,DC=local' | ForEach-Object { (Get-Acl \"AD:\\$($_.DistinguishedName)\").Owner } | Group-Object | Sort-Object Count -Descending",
+    "breakRisk": "Low. Changing an owner does not remove anyone's explicit DACL access, so workflows generally continue working. The exception is tooling that relies on implicit owner rights rather than a granted permission.",
+    "effort": "Low",
+    "lab": "Create an object as a non-privileged user in a delegated OU and check its owner. That is where most real WriteOwner edges come from, not from an attacker.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1222.001 - Windows File and Directory Permissions Modification",
+        "url": "https://attack.mitre.org/techniques/T1222/001/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-005",
+    "title": "ForceChangePassword over a user",
+    "category": "ACL Edges",
+    "severity": "High",
+    "edges": [
+      "ForceChangePassword"
+    ],
+    "summary": "The User-Force-Change-Password extended right, which sets a new password without knowing the old one.",
+    "howItWorks": "This is the helpdesk right, and on ordinary user accounts it is exactly what it should be. It becomes an attack path when it points at a privileged account, a service account, or when the helpdesk group that holds it is itself weakly protected. The attacker resets the target's password and logs in as them. The reset is loud, because the user notices immediately, so it is typically used against accounts nobody logs into interactively: service accounts, shared mailboxes, and dormant admin accounts. That is also why the finding matters most where the target is not a person.",
+    "attackChain": [
+      "Identify a ForceChangePassword edge to a privileged or service account",
+      "Reset the target's password",
+      "Authenticate as the target",
+      "Use its group memberships or delegated rights to continue"
+    ],
+    "mitre": [
+      "T1098",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "List who holds the right over privileged accounts. Delegation to a helpdesk group over an admin OU is the usual culprit.",
+        "command": "Get-ADUser -LDAPFilter '(admincount=1)' | ForEach-Object { (Get-Acl \"AD:\\$($_.DistinguishedName)\").Access | Where-Object { $_.ObjectType -eq '00299570-246d-11d0-a768-00aa006e0529' } | Select-Object @{n='Target';e={$_}},IdentityReference }"
+      },
+      {
+        "step": "Scope helpdesk password reset delegation to the OUs holding standard user accounts, and never to the OU holding administrative accounts.",
+        "command": "dsacls 'OU=Staff,DC=corp,DC=local' /I:S /G 'CORP\\Helpdesk:CA;Reset Password;user'"
+      },
+      {
+        "step": "Move privileged and service accounts into a separate OU with its own delegation model, so a broad grant cannot reach them by inheritance.",
+        "command": "Move-ADObject -Identity 'CN=svc-app,OU=Users,DC=corp,DC=local' -TargetPath 'OU=ServiceAccounts,DC=corp,DC=local'"
+      },
+      {
+        "step": "Alert on event 4724, an administrative password reset, targeting any tier 0 or service account."
+      }
+    ],
+    "validation": "(Get-Acl -Path 'AD:\\OU=Admin,DC=corp,DC=local').Access | Where-Object { $_.ObjectType -eq '00299570-246d-11d0-a768-00aa006e0529' } | Select-Object IdentityReference,IsInherited",
+    "breakRisk": "The service desk will lose the ability to reset passwords for whichever accounts you move out of scope. Agree the escalation path for those accounts before making the change, or you will simply push the work to an on-call administrator with no process.",
+    "effort": "Low",
+    "lab": "Reset a lab service account's password with only this right delegated, then log in as it. Note that no password knowledge was needed at any point.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1098 - Account Manipulation",
+        "url": "https://attack.mitre.org/techniques/T1098/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-006",
+    "title": "Write access to group membership",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "AddMember",
+      "AddSelf",
+      "WriteMember"
+    ],
+    "summary": "The ability to write the member attribute or add oneself. When the target is a privileged group, this is a direct route to its access.",
+    "howItWorks": "Adding yourself to a group is the cleanest escalation in Active Directory because it requires no credential theft, no cracking, and no malware. The write is a normal directory operation. AddSelf is the validated write that lets a principal add only their own account, commonly granted for distribution lists; AddMember is the broader property write. Either one against a group that grants administrative access anywhere is a full escalation. Nested groups make this worse: the attacker does not need the edge to Domain Admins, only to something that is eventually a member of it, and organisations routinely lose track of that nesting.",
+    "attackChain": [
+      "Find a membership-write edge to any group in the path to tier 0",
+      "Add the controlled account to that group",
+      "Obtain a new ticket so the membership appears in the token",
+      "Use the inherited access, then optionally remove the membership again"
+    ],
+    "mitre": [
+      "T1098",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate who can write membership on privileged and nested groups, following the nesting rather than checking only the obvious groups.",
+        "command": "Get-ADGroup -Identity 'Domain Admins' -Properties nTSecurityDescriptor | ForEach-Object { $_.nTSecurityDescriptor.Access | Where-Object { $_.ActiveDirectoryRights -match 'WriteProperty|GenericAll|GenericWrite|Self' } | Select-Object IdentityReference,ActiveDirectoryRights,ObjectType }"
+      },
+      {
+        "step": "Remove membership-write delegation from any group that leads to administrative access, and flatten unnecessary nesting so the reachable set is smaller.",
+        "command": "Get-ADGroupMember -Identity 'Domain Admins' -Recursive | Where-Object objectClass -eq 'group'"
+      },
+      {
+        "step": "Where self-service group management is a genuine requirement, move it to a request and approval workflow rather than a direct directory permission."
+      },
+      {
+        "step": "Alert on events 4728, 4732, and 4756 for additions to any tier 0 group, and treat an addition outside a change window as an incident."
+      }
+    ],
+    "validation": "(Get-Acl -Path 'AD:\\CN=Domain Admins,CN=Users,DC=corp,DC=local').Access | Where-Object { $_.ActiveDirectoryRights -match 'WriteProperty|GenericWrite|GenericAll|Self' } | Select-Object IdentityReference",
+    "breakRisk": "Self-service distribution list membership and team-managed groups will stop working. Identify which groups are genuinely user-managed and leave those alone; the fix is about groups that confer access, not every group.",
+    "effort": "Medium",
+    "lab": "Nest a lab group inside Domain Admins, grant a user AddMember on the outer group, and watch BloodHound draw the full path. Then flatten the nesting and re-run the collection.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1098 - Account Manipulation",
+        "url": "https://attack.mitre.org/techniques/T1098/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-007",
+    "title": "DCSync rights on the domain",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "DCSync",
+      "GetChanges",
+      "GetChangesAll",
+      "GetChangesInFilteredSet"
+    ],
+    "summary": "A principal holds the directory replication extended rights, letting it request password hashes for any account in the domain, including krbtgt.",
+    "howItWorks": "Domain controllers replicate using the DS-Replication-Get-Changes and DS-Replication-Get-Changes-All extended rights. Any principal holding both can impersonate a DC and ask for the secrets of any account, over the network, from any workstation. There is no exploit involved; it is the replication protocol working as designed for a principal who should not have been granted the rights. The output includes the krbtgt hash, which means golden tickets, so this is the last edge in most BloodHound paths. Azure AD Connect, Exchange, and some backup products hold these rights legitimately, which is exactly why attackers target those service accounts.",
+    "attackChain": [
+      "Enumerate principals holding both replication extended rights on the domain object",
+      "Compromise one of them, often a sync or backup service account",
+      "Request replication of the krbtgt account and any privileged users",
+      "Forge tickets or reuse the recovered hashes at will"
+    ],
+    "mitre": [
+      "T1003.006",
+      "T1558.001"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate everyone holding the replication rights. Expect domain controllers, Enterprise Domain Controllers, Administrators, and possibly a directory sync account.",
+        "command": "$guids = @('1131f6aa-9c07-11d1-f79f-00c04fc2dcd2','1131f6ad-9c07-11d1-f79f-00c04fc2dcd2','89e95b76-444d-4c62-991a-0facbeda640c'); (Get-Acl -Path 'AD:\\DC=corp,DC=local').Access | Where-Object { $_.ObjectType -in $guids } | Select-Object IdentityReference,ObjectType,IsInherited"
+      },
+      {
+        "step": "Remove the rights from anything you cannot account for.",
+        "command": "$acl = Get-Acl -Path 'AD:\\DC=corp,DC=local'; $acl.Access | Where-Object { $_.IdentityReference -eq 'CORP\\svc-legacy' -and $_.ObjectType -in $guids } | ForEach-Object { $acl.RemoveAccessRule($_) | Out-Null }; Set-Acl -Path 'AD:\\DC=corp,DC=local' -AclObject $acl"
+      },
+      {
+        "step": "For accounts that legitimately need them, such as a directory sync account, treat the account as tier 0: long random password or gMSA, logon restricted to the specific server, in Protected Users if the application supports it, and monitored."
+      },
+      {
+        "step": "Rotate krbtgt twice if you find an unexplained holder, since you cannot prove the hash was not already taken."
+      },
+      {
+        "step": "Alert on event 4662 where the properties field contains the replication GUIDs and the account is not a domain controller. This is one of the highest-fidelity detections available in AD."
+      }
+    ],
+    "validation": "$guids = @('1131f6aa-9c07-11d1-f79f-00c04fc2dcd2','1131f6ad-9c07-11d1-f79f-00c04fc2dcd2'); (Get-Acl -Path 'AD:\\DC=corp,DC=local').Access | Where-Object { $_.ObjectType -in $guids } | Select-Object IdentityReference",
+    "breakRisk": "Removing these rights from Azure AD Connect, an Exchange server, or a directory-aware backup product will break password hash synchronisation or the backup itself. Identify the consumer before removing anything; the goal is a short, justified list rather than an empty one.",
+    "effort": "Medium",
+    "lab": "Grant the two replication rights to an unprivileged lab account and run a replication request from a workstation. Then look at the event 4662 it generated, which is the detection you want in production.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1003.006 - DCSync",
+        "url": "https://attack.mitre.org/techniques/T1003/006/"
+      },
+      {
+        "title": "MITRE ATT&CK T1558.001 - Golden Ticket",
+        "url": "https://attack.mitre.org/techniques/T1558/001/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-008",
+    "title": "AddKeyCredentialLink (shadow credentials)",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "AddKeyCredentialLink"
+    ],
+    "summary": "Write access to msDS-KeyCredentialLink, which lets a principal attach a certificate they control and then authenticate as the target without ever knowing its password.",
+    "howItWorks": "The attribute stores public keys for Windows Hello for Business and passwordless logon. Writing to it adds a key pair the attacker holds, after which they request a Kerberos ticket using PKINIT and authenticate as the target account. Nothing about the account changes visibly: the password is untouched, the user notices nothing, and no reset event fires. The attacker can even remove the added key afterwards while keeping the ticket, or keep the key for long-term access. It works against users and computers alike, and it requires the domain to have a certificate authority capable of PKINIT, which most environments with AD CS do.",
+    "attackChain": [
+      "Find write access to msDS-KeyCredentialLink on the target",
+      "Generate a key pair and append it to the attribute",
+      "Request a Kerberos ticket via PKINIT using the attacker-held key",
+      "Extract the NT hash from the ticket or use the ticket directly, then clean up the attribute"
+    ],
+    "mitre": [
+      "T1649",
+      "T1098"
+    ],
+    "remediation": [
+      {
+        "step": "Look for existing values on accounts that have no business having them. Most environments without Windows Hello for Business should see almost none.",
+        "command": "Get-ADObject -LDAPFilter '(msDS-KeyCredentialLink=*)' -Properties msDS-KeyCredentialLink,objectClass | Select-Object Name,ObjectClass"
+      },
+      {
+        "step": "Investigate rather than immediately delete unexpected values, since the presence of one may indicate an active intrusion. Capture the value, then clear it.",
+        "command": "Set-ADObject -Identity 'CN=Target,OU=Users,DC=corp,DC=local' -Clear 'msDS-KeyCredentialLink'"
+      },
+      {
+        "step": "Remove write access to the attribute from any principal that is not tier 0, and remember that GenericAll and GenericWrite both include it.",
+        "command": "(Get-Acl -Path 'AD:\\CN=Target,OU=Users,DC=corp,DC=local').Access | Where-Object { $_.ObjectType -eq '5b47d60f-6090-40b2-9f37-2a4de88f3063' -or $_.ActiveDirectoryRights -match 'GenericAll|GenericWrite' }"
+      },
+      {
+        "step": "If you do not use Windows Hello for Business or passwordless authentication, audit the attribute regularly. Any value at all is worth a look."
+      },
+      {
+        "step": "Enable directory service change auditing so writes to the attribute produce event 5136 with the old and new values."
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(msDS-KeyCredentialLink=*)' -Properties msDS-KeyCredentialLink | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Clearing the attribute on accounts genuinely enrolled in Windows Hello for Business will break their passwordless sign-in and require re-enrolment. Check whether WHfB is deployed before bulk-clearing anything.",
+    "effort": "Medium",
+    "lab": "With GenericWrite over a lab user, add a key credential, authenticate with PKINIT, and recover the NT hash. Then check the account's PasswordLastSet, which will be unchanged. That is why this is preferred over a password reset.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1649 - Steal or Forge Authentication Certificates",
+        "url": "https://attack.mitre.org/techniques/T1649/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-009",
+    "title": "WriteSPN (targeted kerberoasting)",
+    "category": "ACL Edges",
+    "severity": "High",
+    "edges": [
+      "WriteSPN",
+      "AddSPN"
+    ],
+    "summary": "Write access to the servicePrincipalName attribute, which lets a principal make any account kerberoastable on demand.",
+    "howItWorks": "Kerberoasting normally only reaches accounts that already have an SPN. With write access to the attribute, an attacker chooses the target: they write an arbitrary SPN onto a privileged account, request a service ticket for it, crack it offline, and then remove the SPN so the account looks untouched. The account does not need to be a service account and does not need to run anything. The only real defence at the credential level is password length, because a 25-character random password is not crackable regardless of how many tickets the attacker collects.",
+    "attackChain": [
+      "Find write access to servicePrincipalName on a privileged account",
+      "Write an arbitrary SPN onto the target",
+      "Request a service ticket for that SPN and export it",
+      "Remove the SPN, then crack the ticket offline at leisure"
+    ],
+    "mitre": [
+      "T1558.003",
+      "T1098"
+    ],
+    "remediation": [
+      {
+        "step": "Identify who can write the attribute on privileged accounts, including through GenericAll and GenericWrite.",
+        "command": "Get-ADUser -LDAPFilter '(admincount=1)' | ForEach-Object { $dn = $_.DistinguishedName; (Get-Acl \"AD:\\$dn\").Access | Where-Object { $_.ObjectType -eq 'f3a64788-5306-11d1-a9c5-0000f80367c1' -or $_.ActiveDirectoryRights -match 'GenericAll|GenericWrite' } | Select-Object @{n='Target';e={$dn}},IdentityReference }"
+      },
+      {
+        "step": "Remove the delegation, or scope it to the service account OU where SPN management is genuinely needed."
+      },
+      {
+        "step": "Make the credential resistant regardless: give privileged and service accounts long random passwords, or move them to gMSAs where rotation is automatic.",
+        "command": "New-ADServiceAccount -Name gmsa-app -DNSHostName app01.corp.local -PrincipalsAllowedToRetrieveManagedPassword 'App Servers'"
+      },
+      {
+        "step": "Alert on event 5136 showing a servicePrincipalName write on an account with adminCount set, which is a strong indicator of this specific technique."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(&(admincount=1)(servicePrincipalName=*))' | Select-Object Name,ServicePrincipalNames",
+    "breakRisk": "Low if the delegation was unused. Applications that self-register SPNs at install time will fail to do so, which usually surfaces as a Kerberos authentication failure after a reinstall rather than immediately.",
+    "effort": "Low",
+    "lab": "Write an SPN onto a lab admin account, roast it, then remove the SPN. Compare the account's attributes before and after; the only trace is in the security log, not the object.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1558.003 - Kerberoasting",
+        "url": "https://attack.mitre.org/techniques/T1558/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-010",
+    "title": "AddAllowedToAct or WriteAccountRestrictions on a computer",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "AddAllowedToAct",
+      "WriteAccountRestrictions"
+    ],
+    "summary": "Write access to msDS-AllowedToActOnBehalfOfOtherIdentity, which configures resource-based constrained delegation and yields local administrator on the target computer.",
+    "howItWorks": "RBCD is configured on the target, so writing this one attribute on a computer object decides who may impersonate users to it. An attacker with the write creates or takes over a machine account, points the attribute at it, then uses S4U to request a service ticket as a local administrator on that host. This is the standard conversion from a directory permission into code execution on a machine, and it is why the default machine account quota matters so much: without a controllable machine account the attacker needs another principal with an SPN, which is a higher bar.",
+    "attackChain": [
+      "Find write access to the RBCD attribute on a target computer",
+      "Create a machine account, which the default quota of 10 permits",
+      "Write that account's SID into the attribute on the target",
+      "Request a service ticket as a local administrator via S4U and connect"
+    ],
+    "mitre": [
+      "T1098",
+      "T1550.003"
+    ],
+    "remediation": [
+      {
+        "step": "Find computers where non-tier-0 principals can write the attribute.",
+        "command": "Get-ADComputer -Filter * | ForEach-Object { $dn = $_.DistinguishedName; (Get-Acl \"AD:\\$dn\").Access | Where-Object { $_.ObjectType -eq '3f78c3e5-f79a-46bd-a0b8-9d18116ddc79' -or $_.ActiveDirectoryRights -match 'GenericAll|GenericWrite|WriteDacl|WriteOwner' } | Select-Object @{n='Computer';e={$dn}},IdentityReference,ActiveDirectoryRights }"
+      },
+      {
+        "step": "Clear any RBCD configuration that is not documented and owned.",
+        "command": "Set-ADComputer -Identity TARGET01 -PrincipalsAllowedToDelegateToAccount $null"
+      },
+      {
+        "step": "Set the machine account quota to zero, which removes the easiest way for an attacker to obtain the controllable principal this needs.",
+        "command": "Set-ADDomain -Identity (Get-ADDomain).DistinguishedName -Replace @{'ms-DS-MachineAccountQuota'=0}"
+      },
+      {
+        "step": "Fix the underlying delegation on the computer OU. Broad write access over computer objects, often granted to a desktop support group, is the usual source."
+      },
+      {
+        "step": "Put tier 0 accounts in Protected Users and set the sensitive flag, so even a successful RBCD setup cannot impersonate them."
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(msDS-AllowedToActOnBehalfOfOtherIdentity=*)' -Properties samAccountName | Select-Object Name",
+    "breakRisk": "Clearing the attribute breaks any application genuinely using RBCD, which shows up as access denied on the back-end service. Confirm ownership first. Setting the quota to zero breaks user-driven domain join until join rights are delegated properly.",
+    "effort": "Medium",
+    "lab": "Give a test user GenericWrite over a lab computer, then complete the full chain: create a machine account, configure RBCD, S4U, and connect as administrator. It is the clearest demonstration of a directory permission becoming shell access.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1550.003 - Pass the Ticket",
+        "url": "https://attack.mitre.org/techniques/T1550/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-011",
+    "title": "ReadLAPSPassword on a computer",
+    "category": "ACL Edges",
+    "severity": "High",
+    "edges": [
+      "ReadLAPSPassword",
+      "SyncLAPSPassword"
+    ],
+    "summary": "A principal can read the managed local administrator password from the computer object, which is local administrator on that host.",
+    "howItWorks": "LAPS solves shared local passwords, but the password still lives in the directory, so the read permission on that attribute is equivalent to local administrator on every machine it covers. Organisations deploy LAPS correctly and then grant read access far too broadly, commonly to the whole helpdesk group across the whole workstation OU. An attacker who compromises any member of that group gets administrator on every workstation, one lookup at a time, which is exactly the outcome LAPS was meant to prevent. The permission is also easy to miss because it is an extended right on an attribute rather than a group membership.",
+    "attackChain": [
+      "Enumerate who can read the LAPS password attribute, which BloodHound collects directly",
+      "Compromise any principal holding that read",
+      "Read the local administrator password for a target machine",
+      "Log on locally and harvest whatever domain credentials are cached there"
+    ],
+    "mitre": [
+      "T1078.003",
+      "T1555"
+    ],
+    "remediation": [
+      {
+        "step": "Audit who holds the read right across each OU, for both Windows LAPS and the legacy version.",
+        "command": "Find-LapsADExtendedRights -Identity 'OU=Workstations,DC=corp,DC=local'"
+      },
+      {
+        "step": "Reduce the readers to the smallest group that genuinely needs standing access, and scope it per OU rather than domain-wide.",
+        "command": "Set-LapsADReadPasswordPermission -Identity 'OU=Workstations,DC=corp,DC=local' -AllowedPrincipals 'CORP\\Desktop-Support'"
+      },
+      {
+        "step": "Separate server and workstation OUs so a workstation support group cannot read server passwords, and keep domain controllers out of LAPS scope entirely."
+      },
+      {
+        "step": "Enable post-authentication reset so the password rotates shortly after each administrative use, shrinking the window a read is useful for."
+      },
+      {
+        "step": "Audit reads. Windows LAPS supports auditing password retrieval, and a helpdesk account reading dozens of machines in an hour is a strong signal.",
+        "command": "Get-WinEvent -LogName 'Microsoft-Windows-LAPS/Operational' -MaxEvents 50"
+      }
+    ],
+    "validation": "Find-LapsADExtendedRights -Identity 'OU=Workstations,DC=corp,DC=local' | Select-Object ObjectDN,ExtendedRightHolders",
+    "breakRisk": "Support staff removed from the reader group lose the ability to log on locally to machines they support. Confirm the support model, and consider a just-in-time request process rather than removing access with no replacement.",
+    "effort": "Low",
+    "lab": "Read a lab machine's LAPS password with a delegated account, log on locally, and dump cached credentials. It shows why the read permission is a tier boundary, not a convenience setting.",
+    "references": [
+      {
+        "title": "Microsoft Learn - Windows LAPS overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview"
+      },
+      {
+        "title": "MITRE ATT&CK T1078.003 - Local Accounts",
+        "url": "https://attack.mitre.org/techniques/T1078/003/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-012",
+    "title": "ReadGMSAPassword on a managed service account",
+    "category": "ACL Edges",
+    "severity": "High",
+    "edges": [
+      "ReadGMSAPassword",
+      "DumpSMSAPassword"
+    ],
+    "summary": "A principal can retrieve the managed password blob for a gMSA, which means authenticating as that service account.",
+    "howItWorks": "A gMSA's password is generated and rotated by the domain, and any principal listed in msDS-GroupMSAMembership can retrieve it. That list is meant to hold the specific computers running the service. When it holds a broad group instead, or a user group added during troubleshooting, anyone in it can compute the account's hash and authenticate as the service. Since gMSAs often run application or backup services with meaningful privilege, this converts an ordinary account into a service identity. The retrieval is a normal LDAP read of an attribute, so it does not look like credential theft.",
+    "attackChain": [
+      "Identify gMSAs and read the principals allowed to retrieve their passwords",
+      "Compromise any principal on that list",
+      "Retrieve the managed password blob and derive the hash",
+      "Authenticate as the service account and use its access"
+    ],
+    "mitre": [
+      "T1078.002",
+      "T1555"
+    ],
+    "remediation": [
+      {
+        "step": "List every gMSA with the principals permitted to retrieve its password.",
+        "command": "Get-ADServiceAccount -Filter * -Properties PrincipalsAllowedToRetrieveManagedPassword | Select-Object Name,PrincipalsAllowedToRetrieveManagedPassword"
+      },
+      {
+        "step": "Restrict the list to the specific computer accounts or computer group that runs the service. Never a user group.",
+        "command": "Set-ADServiceAccount -Identity gmsa-app -PrincipalsAllowedToRetrieveManagedPassword (Get-ADGroup 'App Servers')"
+      },
+      {
+        "step": "Review what the gMSA itself can do. A tightly scoped retrieval list still leaves a problem if the account is over-privileged.",
+        "command": "Get-ADServiceAccount gmsa-app -Properties MemberOf | Select-Object -ExpandProperty MemberOf"
+      },
+      {
+        "step": "Remove gMSAs that are no longer used, since their retrieval lists tend to accumulate principals over time."
+      }
+    ],
+    "validation": "Get-ADServiceAccount -Filter * -Properties PrincipalsAllowedToRetrieveManagedPassword | Select-Object Name,PrincipalsAllowedToRetrieveManagedPassword",
+    "breakRisk": "If you remove a computer that actually runs the service, that service fails to start at its next restart, which may not be immediately. Verify against the running service inventory rather than assumptions.",
+    "effort": "Low",
+    "lab": "Add a lab user to a gMSA's retrieval list, pull the password blob, and authenticate as the service. Then correct the list to a computer group and confirm the retrieval fails.",
+    "references": [
+      {
+        "title": "Microsoft Learn - Group managed service accounts overview",
+        "url": "https://learn.microsoft.com/en-us/windows-server/security/group-managed-service-accounts/group-managed-service-accounts-overview"
+      }
+    ]
+  },
+  {
+    "id": "ADR-ACL-013",
+    "title": "Control of a Group Policy Object or its link",
+    "category": "ACL Edges",
+    "severity": "Critical",
+    "edges": [
+      "GPOAppliesTo",
+      "WriteGPLink",
+      "AddSelf-GPO",
+      "GPLink"
+    ],
+    "summary": "Write access to a GPO, or the ability to link one, means code execution on every computer and user the policy applies to.",
+    "howItWorks": "A GPO is a set of instructions that domain members fetch and execute with SYSTEM privileges. Edit rights on a GPO therefore mean running whatever you like on every machine in its scope: an immediate scheduled task, a startup script, adding an account to the local Administrators group, or installing a service. WriteGPLink on an OU is the same outcome by a different route, since the attacker links a GPO they already control to the OU containing the machines they want. The scope is what determines severity: an edge to a GPO linked at the domain root or the Domain Controllers OU is a domain takeover, while one linked to a test OU may be trivial.",
+    "attackChain": [
+      "Find write access to a GPO, or link rights on an OU containing valuable machines",
+      "Add an immediate scheduled task or startup script to the policy",
+      "Wait for policy refresh, or force it, so the payload runs as SYSTEM",
+      "Collect credentials from the machines the policy reached"
+    ],
+    "mitre": [
+      "T1484.001",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Work out what each GPO actually applies to before judging severity, then enumerate who can edit it.",
+        "command": "Get-GPO -All | ForEach-Object { [pscustomobject]@{ Name = $_.DisplayName; Links = (Get-GPOReport -Guid $_.Id -ReportType Xml | Select-String -Pattern '<LinksTo>' -AllMatches).Matches.Count; Editors = (Get-GPPermission -Guid $_.Id -All | Where-Object { $_.Permission -match 'GpoEdit|GpoEditDeleteModifySecurity' }).Trustee.Name -join '; ' } }"
+      },
+      {
+        "step": "Remove edit permissions from principals that are not tier 0 for any GPO linked at the domain root or the Domain Controllers OU.",
+        "command": "Set-GPPermission -Guid <guid> -TargetName 'CORP\\Desktop-Support' -TargetType Group -PermissionLevel None"
+      },
+      {
+        "step": "Audit WriteGPLink on OUs, which is delegated more often than GPO edit rights and is just as powerful.",
+        "command": "(Get-Acl -Path 'AD:\\OU=Workstations,DC=corp,DC=local').Access | Where-Object { $_.ObjectType -eq 'f30e3bbe-9ff0-11d1-b603-0000f80367c1' } | Select-Object IdentityReference"
+      },
+      {
+        "step": "Split policy administration by tier: the group that manages workstation policy should have no rights over policies linked to servers or domain controllers."
+      },
+      {
+        "step": "Alert on GPO modification, event 5136 against Group Policy container objects and changes to files under SYSVOL, since legitimate GPO edits are rare and scheduled."
+      }
+    ],
+    "validation": "Get-GPO -All | ForEach-Object { Get-GPPermission -Guid $_.Id -All | Where-Object { $_.Permission -match 'GpoEdit' -and $_.Trustee.Name -notmatch 'Domain Admins|Enterprise Admins|SYSTEM' } }",
+    "breakRisk": "Removing edit rights stops the affected team from managing policies they may own legitimately. Split the GPOs by tier before removing permissions, or the desktop team loses the ability to do routine work.",
+    "effort": "High",
+    "lab": "In a lab, add an immediate scheduled task to a GPO linked at an OU and watch it run as SYSTEM on the machines in scope at the next refresh. Then check which events recorded the change.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1484.001 - Group Policy Modification",
+        "url": "https://attack.mitre.org/techniques/T1484/001/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PATH-001",
+    "title": "AdminTo: local administrator rights on a computer",
+    "category": "Attack Paths",
+    "severity": "High",
+    "edges": [
+      "AdminTo"
+    ],
+    "summary": "A principal is a member of the local Administrators group on a host. That means full control of the machine and access to every credential cached on it.",
+    "howItWorks": "Local administrator is the most common edge in a BloodHound graph and the one most often dismissed as normal. It matters because of what it reaches: an administrator on a host can read LSASS, recover the credentials of anyone logged on there, and use the machine account itself. Derivative local admin is the classic pattern, where a support group is administrator on hundreds of workstations, so compromising any one account in that group reaches all of them and every credential that ever touched them. The severity of a single AdminTo edge depends entirely on who logs on to that host.",
+    "attackChain": [
+      "Compromise a principal with local administrator rights on a host",
+      "Dump credentials from memory and from the local SAM",
+      "Reuse recovered domain credentials elsewhere",
+      "Repeat where those credentials are also administrator"
+    ],
+    "mitre": [
+      "T1078.002",
+      "T1003.001"
+    ],
+    "remediation": [
+      {
+        "step": "Inventory local administrator membership across the estate, which is what makes the sprawl visible in the first place.",
+        "command": "Invoke-Command -ComputerName (Get-ADComputer -Filter {Enabled -eq $true}).Name -ScriptBlock { Get-LocalGroupMember -Group 'Administrators' } -ErrorAction SilentlyContinue"
+      },
+      {
+        "step": "Replace ad hoc membership with Group Policy restricted groups or Local Users and Groups preferences, so membership is declared centrally and drift is corrected automatically."
+      },
+      {
+        "step": "Enforce tiering: an account that administers servers must not be administrator on workstations, and no tier 0 account should be administrator anywhere except domain controllers."
+      },
+      {
+        "step": "Deny network and remote interactive logon for local accounts to break lateral movement even where a local password is recovered.",
+        "command": "# Computer Configuration > Policies > Windows Settings > Security Settings > Local Policies > User Rights Assignment > Deny access to this computer from the network: Local account"
+      },
+      {
+        "step": "Enable Credential Guard and LSA protection so administrator on the host does not immediately mean credentials from memory."
+      }
+    ],
+    "validation": "Get-LocalGroupMember -Group 'Administrators' | Select-Object Name,PrincipalSource",
+    "breakRisk": "Removing local administrator from a support group will surface every undocumented task that depended on it, usually within a day. Stage it: log what those accounts actually do first, then provide the specific mechanism, then remove.",
+    "effort": "High",
+    "lab": "Map derivative local admin in a lab: give one group administrator on two machines, log a privileged user on to one, and let BloodHound draw the path from the group to Domain Admins.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1003.001 - LSASS Memory",
+        "url": "https://attack.mitre.org/techniques/T1003/001/"
+      },
+      {
+        "title": "Microsoft Learn - Securing privileged access",
+        "url": "https://learn.microsoft.com/en-us/security/privileged-access-workstations/overview"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PATH-002",
+    "title": "HasSession: privileged credentials exposed on a host",
+    "category": "Attack Paths",
+    "severity": "High",
+    "edges": [
+      "HasSession"
+    ],
+    "summary": "A user has an active session on a computer, so their credentials are recoverable by anyone with administrator rights on that host.",
+    "howItWorks": "This edge is what turns local administrator into domain administrator. When a privileged account logs on interactively, or via RDP, or runs a service, its credential material stays in memory on that machine. Anyone who is administrator there can take it. The edge is transient and reflects the moment of collection, but the pattern usually is not: administrators tend to log on to the same helpdesk jump box or the same file server repeatedly. The fix is not to clean up the session, it is to stop privileged accounts from authenticating to machines that lower-tier accounts control.",
+    "attackChain": [
+      "Compromise a workstation or server as local administrator",
+      "Enumerate active sessions to find where privileged users are logged on",
+      "Wait for or trigger a privileged logon to that host",
+      "Extract the credential from memory and use it against a domain controller"
+    ],
+    "mitre": [
+      "T1003.001",
+      "T1078.002"
+    ],
+    "remediation": [
+      {
+        "step": "Use authentication policy silos to hard-restrict where tier 0 accounts can authenticate, which is the durable fix rather than a policy document.",
+        "command": "New-ADAuthenticationPolicySilo -Name 'Tier0-Silo' -UserAuthenticationPolicy 'Tier0-Policy' -ComputerAuthenticationPolicy 'Tier0-Policy' -Enforce"
+      },
+      {
+        "step": "Add tier 0 accounts to Protected Users, which prevents credential caching and blocks NTLM for them entirely.",
+        "command": "Add-ADGroupMember -Identity 'Protected Users' -Members jdoe-adm"
+      },
+      {
+        "step": "Deny tier 0 accounts logon rights on workstations and member servers through Group Policy user rights assignment, and deny lower-tier accounts logon to domain controllers."
+      },
+      {
+        "step": "Give administrators dedicated privileged access workstations for tier 0 work, so the only machines their credentials touch are ones at the same trust level."
+      },
+      {
+        "step": "Where an administrator must troubleshoot a workstation, use a mechanism that does not expose the credential, such as restricted admin RDP or a remote support tool with its own identity."
+      }
+    ],
+    "validation": "Get-ADUser -LDAPFilter '(admincount=1)' -Properties memberOf | Where-Object { $_.memberOf -notmatch 'Protected Users' } | Select-Object Name",
+    "breakRisk": "Authentication policy silos are enforced hard: if the allowed computer list is wrong, tier 0 accounts are locked out of systems they need. Create the policy in audit mode first, review the events for a full cycle, and only then enforce.",
+    "effort": "High",
+    "lab": "Log a lab domain admin on to a member server, then dump the credential from that server as local administrator. Add the admin to Protected Users, log on again, and confirm there is nothing left to take.",
+    "references": [
+      {
+        "title": "Microsoft Learn - How to configure protected accounts",
+        "url": "https://learn.microsoft.com/en-us/windows-server/identity/ad-ds/manage/how-to-configure-protected-accounts"
+      },
+      {
+        "title": "MITRE ATT&CK T1003.001 - LSASS Memory",
+        "url": "https://attack.mitre.org/techniques/T1003/001/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PATH-003",
+    "title": "CanRDP, CanPSRemote, or ExecuteDCOM to a computer",
+    "category": "Attack Paths",
+    "severity": "Medium",
+    "edges": [
+      "CanRDP",
+      "CanPSRemote",
+      "ExecuteDCOM"
+    ],
+    "summary": "A principal can execute code on a host without being a local administrator, through Remote Desktop, WinRM, or DCOM.",
+    "howItWorks": "These are the footholds rather than the escalations. Membership in Remote Desktop Users, Remote Management Users, or Distributed COM Users grants an interactive or remote execution channel on the host. From there the attacker looks for a local privilege escalation, or simply harvests what is reachable as that user. They matter most when the grant is broad, such as Domain Users being able to RDP to a jump box, because that turns any compromised account into a shell on a shared machine where other people's credentials live. Application control is worth checking here too, since some products do not filter script execution arriving over WinRM the way they do locally.",
+    "attackChain": [
+      "Compromise any account with remote execution rights on a host",
+      "Connect over RDP, WinRM, or DCOM",
+      "Escalate locally, or collect what is accessible as that user",
+      "Use the host as a staging point for the next hop"
+    ],
+    "mitre": [
+      "T1021.001",
+      "T1021.006"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate the three groups across the estate, looking for broad principals like Domain Users or Authenticated Users.",
+        "command": "Invoke-Command -ComputerName SERVER01 -ScriptBlock { 'Remote Desktop Users','Remote Management Users','Distributed COM Users' | ForEach-Object { Get-LocalGroupMember -Group $_ -ErrorAction SilentlyContinue } }"
+      },
+      {
+        "step": "Replace broad membership with the specific group that needs access to that specific host, managed by Group Policy rather than locally."
+      },
+      {
+        "step": "Restrict WinRM and RDP at the network layer so they are reachable only from administrative subnets or jump hosts, not from any workstation.",
+        "command": "Get-NetFirewallRule -DisplayGroup 'Windows Remote Management' | Get-NetFirewallAddressFilter"
+      },
+      {
+        "step": "Verify that your application control policy covers script execution arriving over WinRM, not only interactive execution. Several products have a gap here that is easy to assume away."
+      },
+      {
+        "step": "Enable PowerShell script block logging and module logging so remote execution is recorded regardless of the channel used.",
+        "command": "# Computer Configuration > Policies > Administrative Templates > Windows Components > Windows PowerShell > Turn on PowerShell Script Block Logging"
+      }
+    ],
+    "validation": "Get-LocalGroupMember -Group 'Remote Desktop Users' | Select-Object Name,PrincipalSource",
+    "breakRisk": "Tightening RDP or WinRM membership will cut off users who quietly depended on it, including automation that connects with a service account. Review recent logon events for each host before changing membership.",
+    "effort": "Medium",
+    "lab": "Grant a low-privileged lab user CanPSRemote to a server and connect. Then check whether your endpoint tooling logged the session and whether application control applied to the commands you ran.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1021.001 - Remote Desktop Protocol",
+        "url": "https://attack.mitre.org/techniques/T1021/001/"
+      },
+      {
+        "title": "MITRE ATT&CK T1021.006 - Windows Remote Management",
+        "url": "https://attack.mitre.org/techniques/T1021/006/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PATH-004",
+    "title": "SQLAdmin: sysadmin rights on a SQL Server instance",
+    "category": "Attack Paths",
+    "severity": "High",
+    "edges": [
+      "SQLAdmin"
+    ],
+    "summary": "A principal holds sysadmin on a SQL Server instance, which generally converts to code execution on the host as the service account.",
+    "howItWorks": "SQL Server sysadmin is a path out of the database and onto the operating system. The classic route is enabling and calling xp_cmdshell, which executes as the SQL service account, but there are others including CLR assemblies and agent jobs. The severity depends on what that service account is: a domain account running SQL on several servers, or worse an account in Domain Admins, turns a database permission into domain compromise. Linked servers extend the reach further, because a sysadmin on one instance can often execute on another through the link.",
+    "attackChain": [
+      "Compromise a principal with sysadmin on an instance",
+      "Enable and use xp_cmdshell, or deploy a CLR assembly, to run commands",
+      "Execute as the SQL service account on that host",
+      "Follow linked servers to other instances and repeat"
+    ],
+    "mitre": [
+      "T1078.002",
+      "T1059"
+    ],
+    "remediation": [
+      {
+        "step": "Enumerate sysadmin membership on each instance and identify which logins are domain groups rather than individuals.",
+        "command": "Invoke-Sqlcmd -ServerInstance SQL01 -Query \"SELECT p.name, p.type_desc FROM sys.server_role_members rm JOIN sys.server_principals p ON rm.member_principal_id = p.principal_id JOIN sys.server_principals r ON rm.role_principal_id = r.principal_id WHERE r.name = 'sysadmin'\""
+      },
+      {
+        "step": "Remove sysadmin from anyone who does not administer the database engine itself. Application accounts almost never need it.",
+        "command": "Invoke-Sqlcmd -ServerInstance SQL01 -Query \"ALTER SERVER ROLE sysadmin DROP MEMBER [CORP\\AppTeam]\""
+      },
+      {
+        "step": "Run the SQL service under a low-privileged account or a gMSA, never a domain administrator. This caps what a successful escalation reaches.",
+        "command": "Get-CimInstance Win32_Service -Filter \"Name LIKE 'MSSQL%'\" | Select-Object Name,StartName"
+      },
+      {
+        "step": "Confirm xp_cmdshell is disabled and CLR integration is off unless a documented application requires them.",
+        "command": "Invoke-Sqlcmd -ServerInstance SQL01 -Query \"EXEC sp_configure 'show advanced options',1; RECONFIGURE; EXEC sp_configure 'xp_cmdshell'\""
+      },
+      {
+        "step": "Review linked servers and the credential context each one uses, since a link configured with a privileged account extends this path silently."
+      }
+    ],
+    "validation": "Invoke-Sqlcmd -ServerInstance SQL01 -Query \"SELECT p.name FROM sys.server_role_members rm JOIN sys.server_principals p ON rm.member_principal_id = p.principal_id JOIN sys.server_principals r ON rm.role_principal_id = r.principal_id WHERE r.name = 'sysadmin'\"",
+    "breakRisk": "Applications that were installed with sysadmin and never re-scoped will fail on operations they should not have been doing. Test in a non-production instance, since the permission the application actually needs is usually db_owner on one database.",
+    "effort": "Medium",
+    "lab": "In a lab instance, use sysadmin to enable xp_cmdshell and run a command, then check which account it ran as. Change the service account and repeat to see the blast radius change.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1059 - Command and Scripting Interpreter",
+        "url": "https://attack.mitre.org/techniques/T1059/"
+      }
+    ]
+  },
+  {
+    "id": "ADR-PATH-005",
+    "title": "HasSIDHistory: privileged SID carried in an account's history",
+    "category": "Attack Paths",
+    "severity": "High",
+    "edges": [
+      "HasSIDHistory"
+    ],
+    "summary": "An account's sIDHistory attribute contains the SID of another principal, so it receives that principal's access without being a member of anything.",
+    "howItWorks": "sIDHistory exists so migrated accounts keep access to resources still permissioned to their old SID. The value is added to the user's token at logon, which means an account can hold administrative access with no group membership to show for it. That makes it both a legitimate migration artefact and an excellent persistence mechanism: an attacker who can write the attribute adds a privileged SID and gains that access invisibly to anyone reviewing group membership. Migrations that were never cleaned up leave the same exposure by accident, sometimes years later.",
+    "attackChain": [
+      "Write a privileged SID into a controlled account's sIDHistory, or find an account that already carries one",
+      "Log on to receive the additional SID in the token",
+      "Access resources permissioned to the historical principal",
+      "Remain invisible to group membership reviews"
+    ],
+    "mitre": [
+      "T1134.005"
+    ],
+    "remediation": [
+      {
+        "step": "Find every account carrying sIDHistory and resolve what each historical SID maps to.",
+        "command": "Get-ADUser -LDAPFilter '(sIDHistory=*)' -Properties sIDHistory | Select-Object Name,@{n='History';e={$_.sIDHistory -join '; '}}"
+      },
+      {
+        "step": "Flag any historical SID whose RID indicates a privileged group, particularly 512, 516, 518, 519, and 520, plus the built-in administrators SID."
+      },
+      {
+        "step": "Re-permission the resources that still rely on the old SID, then clear the attribute. Clearing first will break access.",
+        "command": "Set-ADUser -Identity jdoe -Remove @{sIDHistory='S-1-5-21-1004336348-1177238915-682003330-512'}"
+      },
+      {
+        "step": "Enable SID filtering on trusts so a SID from another domain cannot be injected across the trust boundary.",
+        "command": "netdom trust corp.local /domain:partner.local /quarantine:yes"
+      },
+      {
+        "step": "Close out the migration formally. sIDHistory should be empty in a domain with no migration in progress, so treat any value as either unfinished work or an intrusion."
+      }
+    ],
+    "validation": "Get-ADObject -LDAPFilter '(sIDHistory=*)' -Properties sIDHistory | Measure-Object | Select-Object -ExpandProperty Count",
+    "breakRisk": "Clearing sIDHistory before re-permissioning breaks access to any resource still using the old SID, often file shares nobody has an inventory of. Re-permission first, verify, then clear.",
+    "effort": "Medium",
+    "lab": "Add a privileged SID to a lab account's sIDHistory, log on, and run whoami /groups to see the SID appear in the token while the group membership list stays empty.",
+    "references": [
+      {
+        "title": "MITRE ATT&CK T1134.005 - SID-History Injection",
+        "url": "https://attack.mitre.org/techniques/T1134/005/"
+      }
+    ]
+  }
+]

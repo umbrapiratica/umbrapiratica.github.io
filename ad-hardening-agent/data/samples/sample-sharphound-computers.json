@@ -1,0 +1,123 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1105",
+      "Properties": {
+        "name": "APPSRV01.CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "unconstraineddelegation": true,
+        "operatingsystem": "Windows Server 2012 R2 Standard",
+        "lastlogontimestamp": 1756600000,
+        "haslaps": false
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1301",
+          "PrincipalType": "Group",
+          "RightName": "AddAllowedToAct",
+          "IsInherited": false
+        }
+      ],
+      "Sessions": {
+        "Collected": true,
+        "Results": [
+          {
+            "UserSID": "S-1-5-21-1004336348-1177238915-682003330-1201",
+            "ComputerSID": "S-1-5-21-1004336348-1177238915-682003330-1105"
+          }
+        ]
+      },
+      "LocalAdmins": {
+        "Collected": true,
+        "Results": [
+          {
+            "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1301",
+            "ObjectType": "Group"
+          }
+        ]
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1131",
+      "Properties": {
+        "name": "LEGACY-FS02.CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "unconstraineddelegation": false,
+        "operatingsystem": "Windows Server 2008 R2 Standard",
+        "lastlogontimestamp": 1756300000,
+        "haslaps": false
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1301",
+          "PrincipalType": "Group",
+          "RightName": "ReadLAPSPassword",
+          "IsInherited": false
+        }
+      ],
+      "LocalAdmins": {
+        "Collected": true,
+        "Results": [
+          {
+            "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1301",
+            "ObjectType": "Group"
+          },
+          {
+            "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-512",
+            "ObjectType": "Group"
+          }
+        ]
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1150",
+      "Properties": {
+        "name": "WS-FINANCE-14.CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "unconstraineddelegation": false,
+        "operatingsystem": "Windows 7 Enterprise",
+        "lastlogontimestamp": 1755900000,
+        "haslaps": false
+      }
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1160",
+      "Properties": {
+        "name": "WS-ENG-42.CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "enabled": true,
+        "unconstraineddelegation": false,
+        "operatingsystem": "Windows 11 Enterprise",
+        "lastlogontimestamp": 1756750000,
+        "haslaps": true
+      },
+      "RemoteDesktopUsers": {
+        "Collected": true,
+        "Results": [
+          {
+            "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-513",
+            "ObjectType": "Group"
+          }
+        ]
+      },
+      "PSRemoteUsers": {
+        "Collected": true,
+        "Results": [
+          {
+            "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1302",
+            "ObjectType": "User"
+          }
+        ]
+      }
+    }
+  ],
+  "meta": {
+    "methods": 5,
+    "type": "computers",
+    "count": 4,
+    "version": 5
+  }
+}

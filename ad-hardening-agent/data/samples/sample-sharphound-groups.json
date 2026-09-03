@@ -1,0 +1,53 @@
+{
+  "data": [
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-512",
+      "Properties": {
+        "name": "DOMAIN ADMINS@CORP.LOCAL",
+        "domain": "CORP.LOCAL",
+        "admincount": true
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1301",
+          "PrincipalType": "Group",
+          "RightName": "WriteDacl",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1303",
+          "PrincipalType": "Group",
+          "RightName": "AddMember",
+          "IsInherited": false
+        }
+      ]
+    },
+    {
+      "ObjectIdentifier": "S-1-5-21-1004336348-1177238915-682003330-1401",
+      "Properties": {
+        "name": "SERVER-OPERATORS-DELEGATED@CORP.LOCAL",
+        "domain": "CORP.LOCAL"
+      },
+      "Aces": [
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1302",
+          "PrincipalType": "Group",
+          "RightName": "GenericWrite",
+          "IsInherited": false
+        },
+        {
+          "PrincipalSID": "S-1-5-21-1004336348-1177238915-682003330-1303",
+          "PrincipalType": "Group",
+          "RightName": "Owns",
+          "IsInherited": false
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "methods": 5,
+    "type": "groups",
+    "count": 2,
+    "version": 5
+  }
+}
