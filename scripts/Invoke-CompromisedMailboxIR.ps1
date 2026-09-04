@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Automated Microsoft-365 Business Email Compromise (BEC) incident-response runbook.
     Multi-tenant aware: you specify the target TenantId at connect time.
@@ -46,6 +46,12 @@
               User.ReadWrite.All, Directory.Read.All, AuditLog.Read.All,
               Device.Read.All, Application.Read.All, Policy.Read.All,
               UserAuthenticationMethod.Read.All, Reports.Read.All
+              -Remediate additionally requests UserAuthenticationMethod.ReadWrite.All
+              and Device.ReadWrite.All, so the first -Remediate run triggers
+              fresh consent. The password reset also needs the operator to hold
+              Authentication Administrator or Privileged Authentication
+              Administrator (User/Helpdesk/Password Administrator covers
+              non-admin targets), and to outrank the target.
     Licensing: Entra ID P1 or P2 is required for sign-in log retrieval.
     Purview:   Search-UnifiedAuditLog requires the "Audit Logs" or
                "View-Only Audit Logs" role IN THE TARGET TENANT.
@@ -148,6 +154,25 @@
     terminal) and revokes all sign-in sessions twice (signs the user out
     everywhere). It does NOT clear forwarding or disable inbox rules - those
     are listed in the triage summary for manual handling.
+
+    THE PASSWORD RESET IS NEVER REPORTED AS DONE ON A GUESS. Two routes are
+    tried, in this order:
+      1. POST /users/{id}/authentication/methods/{pwd}/resetPassword
+         Does not touch the user entity, and pushes to on-premises AD where
+         password writeback is configured. It is ASYNCHRONOUS: it answers 202
+         with a Location header, and the password is NOT in effect until the
+         operation at that URL reports 'succeeded'. The script polls it to a
+         terminal state.
+      2. PATCH /users/{id} { passwordProfile }  - synchronous fallback. This
+         revalidates the WHOLE user entity, so it fails with 400 "Property
+         userPrincipalName is invalid" on any user whose stored UPN suffix is
+         not a verified tenant domain. See the UPN HEALTH section.
+    The credential is printed only when a route reported success, and it is
+    labelled CONFIRMED only when the API said so. A reset that Graph accepted
+    but never confirmed is handed over with a NOT CONFIRMED warning and a HIGH
+    finding. If both routes fail, NOTHING is printed and the script states
+    that the account is not contained. The directory's own
+    lastPasswordChangeDateTime is read before and after as a cross-check.
 
 .PARAMETER ResetMfaMethods
     Pre-answer YES to the "delete all registered MFA methods" prompt. Deletes
@@ -1157,14 +1182,120 @@ function New-IRPassword {
 # https://learn.microsoft.com/graph/api/authenticationmethod-resetpassword
 $script:PasswordMethodId = '28c10230-6103-485e-b985-444c60001490'
 
+# How long to follow the resetPassword long-running operation before giving up
+# on confirming it. The reset has to reach Entra ID and, for a hybrid tenant,
+# be written back to on-premises AD, so this is deliberately generous.
+$script:PwdOpTimeoutSec = 180
+
+# Not every build of Microsoft.Graph.Authentication exposes the response-header
+# capture parameter. Without it the reset action's Location header is
+# unreadable, so the operation cannot be followed and every reset through that
+# route has to be reported as UNCONFIRMED.
+$script:CanReadGraphHeaders = [bool](Resolve-ParamName -CommandName 'Invoke-MgGraphRequest' -Candidates @('ResponseHeadersVariable'))
+
+# Pull the one line that matters out of a Graph failure. Invoke-MgGraphRequest
+# puts the whole HTTP response - status line, headers, diagnostics, body - into
+# Exception.Message, which buries the actual error code and message in ~20 lines
+# of noise.
+function Get-IRGraphError {
+    param([Parameter(Mandatory)]$ErrorRecord)
+    $raw = $null
+    if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) { $raw = [string]$ErrorRecord.ErrorDetails.Message }
+    if (-not $raw) { $raw = [string]$ErrorRecord.Exception.Message }
+    $m = [regex]::Match($raw, '\{\s*"error"\s*:.*\}', [System.Text.RegularExpressions.RegexOptions]::Singleline)
+    if ($m.Success) {
+        try {
+            $o      = $m.Value | ConvertFrom-Json
+            $status = [regex]::Match($raw, 'HTTP/[\d\.]+\s+(\d{3})')
+            $prefix = if ($status.Success) { "HTTP $($status.Groups[1].Value) " } else { '' }
+            return ("{0}{1}: {2}" -f $prefix, $o.error.code, $o.error.message)
+        } catch { }
+    }
+    return ((($raw -split "`r?`n") | Where-Object { $_.Trim() } | Select-Object -First 1))
+}
+
+# Response headers come back as a dictionary whose values are a string or a
+# string[] depending on the module build; normalise to one string.
+function Get-IRHeaderValue {
+    param($Headers, [Parameter(Mandatory)][string]$Name)
+    if (-not $Headers) { return $null }
+    foreach ($k in @($Headers.Keys)) {
+        if ([string]$k -ieq $Name) {
+            $v = $Headers[$k]
+            if ($v -is [string]) { return $v }
+            return ([string](@($v) | Select-Object -First 1))
+        }
+    }
+    return $null
+}
+
+# Follow the resetPassword long-running operation to a terminal state.
+# CRITICAL: the 202 on the POST only means Graph ACCEPTED the reset. The new
+# password is not in effect until the operation reports 'succeeded', and it can
+# still end 'failed' - a banned or policy-noncompliant password, or an
+# on-premises writeback error. Treating the 202 as the answer is exactly how an
+# operator ends up handing over a credential that never took effect while the
+# attacker's password still works.
+# https://learn.microsoft.com/graph/api/longrunningoperation-get
+function Wait-IRPasswordResetOperation {
+    param(
+        [Parameter(Mandatory)][string]$OperationUri,
+        [int]$TimeoutSeconds = 180
+    )
+    # A zero/unset timeout would skip the loop entirely and silently downgrade
+    # every reset to 'unconfirmed'.
+    if ($TimeoutSeconds -le 0) { $TimeoutSeconds = 180 }
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $state    = 'notStarted'
+    $detail   = ''
+    $notFound = 0
+    while ((Get-Date) -lt $deadline) {
+        Start-Sleep -Seconds 3
+        try {
+            $op = Invoke-MgGraphRequest -Method GET -Uri $OperationUri -OutputType PSObject -ErrorAction Stop
+        } catch {
+            # The operation record can lag the 202 by a second or two.
+            $msg = Get-IRGraphError $_
+            if ($msg -match '404|NotFound' -and $notFound -lt 5) { $notFound++; continue }
+            return [pscustomobject]@{ State = 'unconfirmed'; Detail = ('operation status unreadable - ' + $msg) }
+        }
+        if ($op.status)       { $state  = [string]$op.status }
+        if ($op.statusDetail) { $detail = [string]$op.statusDetail }
+        if ($state -eq 'succeeded' -or $state -eq 'failed') {
+            return [pscustomobject]@{ State = $state; Detail = $detail }
+        }
+    }
+    return [pscustomobject]@{ State = 'unconfirmed'; Detail = ("still '{0}' after {1}s{2}" -f $state, $TimeoutSeconds, $(if ($detail) { " - $detail" } else { '' })) }
+}
+
+# Second opinion on whether a reset actually landed, straight from the
+# directory. Advisory only: the value can lag, and on a synced account it
+# follows the on-premises change - so a stale reading is a reason to verify,
+# not a verdict.
+function Get-IRLastPasswordChange {
+    param([Parameter(Mandatory)][string]$UserId)
+    try {
+        $u = Get-GraphOnce ("https://graph.microsoft.com/v1.0/users/{0}?`$select=lastPasswordChangeDateTime" -f $UserId)
+        if ($u.lastPasswordChangeDateTime) { return [datetime]$u.lastPasswordChangeDateTime }
+    } catch { }
+    return $null
+}
+
 # Reset a user's password, trying the two Graph routes in order and reporting
-# which one actually worked. NOTE (round 14): PATCH /users/{id} revalidates the
-# WHOLE user entity, so a stored userPrincipalName whose domain is not verified
-# in the tenant (or which contains illegal characters) makes every PATCH fail
-# with 400 "Property userPrincipalName is invalid" - even when the body only
-# carries passwordProfile. The resetPassword action does not touch the user
-# entity, so it is tried FIRST; it also pushes to on-premises AD when password
-# writeback is configured, and forces a change at next sign-in.
+# which one worked and whether the change was CONFIRMED.
+#
+# NOTE (round 14): PATCH /users/{id} revalidates the WHOLE user entity, so a
+# stored userPrincipalName whose domain is not verified in the tenant (or which
+# contains illegal characters) makes every PATCH fail with 400 "Property
+# userPrincipalName is invalid" - even when the body only carries
+# passwordProfile. The resetPassword action does not touch the user entity, so
+# it is tried FIRST; it also pushes to on-premises AD when password writeback is
+# configured, and forces a change at next sign-in.
+#
+# NOTE (round 15): that action is asynchronous. It answers 202 + a Location
+# header and the password is NOT set until the operation it points at reports
+# 'succeeded'. This function follows it to a terminal state; a bare 202 is
+# reported as Confirmed=$false, never as done.
 function Invoke-IRPasswordReset {
     param(
         [Parameter(Mandatory)][string]$UserId,
@@ -1172,30 +1303,68 @@ function Invoke-IRPasswordReset {
     )
     $errors = [System.Collections.Generic.List[string]]::new()
 
+    # ---- route 1: resetPassword action (leaves the user entity untouched) ----
+    $accepted = $false
+    $opUri    = $null
     try {
-        Invoke-MgGraphRequest -Method POST -ErrorAction Stop `
-            -Uri ("https://graph.microsoft.com/v1.0/users/{0}/authentication/methods/{1}/resetPassword" -f $UserId, $script:PasswordMethodId) `
-            -ContentType 'application/json' `
-            -Body @{ newPassword = $Password } | Out-Null
-        return [pscustomobject]@{ Success = $true; Method = 'resetPassword action'; Errors = $errors }
+        $resetUri = "https://graph.microsoft.com/v1.0/users/{0}/authentication/methods/{1}/resetPassword" -f $UserId, $script:PasswordMethodId
+        if ($script:CanReadGraphHeaders) {
+            $rhv = $null
+            Invoke-MgGraphRequest -Method POST -ErrorAction Stop `
+                -Uri $resetUri -ContentType 'application/json' `
+                -Body @{ newPassword = $Password } `
+                -ResponseHeadersVariable rhv | Out-Null
+            $opUri = Get-IRHeaderValue $rhv 'Location'
+        } else {
+            Invoke-MgGraphRequest -Method POST -ErrorAction Stop `
+                -Uri $resetUri -ContentType 'application/json' `
+                -Body @{ newPassword = $Password } | Out-Null
+        }
+        $accepted = $true
     } catch {
-        $errors.Add("resetPassword action -> " + $_.Exception.Message)
+        $errors.Add('resetPassword action -> ' + (Get-IRGraphError $_))
     }
 
+    if ($accepted) {
+        if (-not $opUri) {
+            $why = if ($script:CanReadGraphHeaders) {
+                'Graph accepted the reset (202) but returned no operation URL to check'
+            } else {
+                'this build of Microsoft.Graph.Authentication has no -ResponseHeadersVariable, so the operation URL cannot be read'
+            }
+            return [pscustomobject]@{ Success = $true; Confirmed = $false; Method = 'resetPassword action'; Detail = $why; Errors = $errors }
+        }
+        Write-Host '     accepted (202) - following the reset operation...' -ForegroundColor DarkGray
+        $op = Wait-IRPasswordResetOperation -OperationUri $opUri -TimeoutSeconds $script:PwdOpTimeoutSec
+        if ($op.State -eq 'succeeded') {
+            return [pscustomobject]@{ Success = $true; Confirmed = $true; Method = 'resetPassword action'; Detail = $op.Detail; Errors = $errors }
+        }
+        if ($op.State -eq 'failed') {
+            # Accepted, then rejected: the password is NOT set. Fall through and
+            # let the PATCH route try - it fails on a broken UPN, but it is the
+            # only other route there is.
+            $errors.Add('resetPassword action -> accepted, then the operation FAILED: ' + $(if ($op.Detail) { $op.Detail } else { '(no detail returned)' }))
+        } else {
+            return [pscustomobject]@{ Success = $true; Confirmed = $false; Method = 'resetPassword action'; Detail = $op.Detail; Errors = $errors }
+        }
+    }
+
+    # ---- route 2: PATCH passwordProfile (synchronous, revalidates the UPN) ----
     try {
         Invoke-MgGraphRequest -Method PATCH -ErrorAction Stop `
             -Uri ("https://graph.microsoft.com/v1.0/users/{0}" -f $UserId) `
             -ContentType 'application/json' `
             -Body @{ passwordProfile = @{ password = $Password; forceChangePasswordNextSignIn = $true } } | Out-Null
-        return [pscustomobject]@{ Success = $true; Method = 'PATCH passwordProfile'; Errors = $errors }
+        return [pscustomobject]@{ Success = $true; Confirmed = $true; Method = 'PATCH passwordProfile'; Detail = ''; Errors = $errors }
     } catch {
-        $errors.Add("PATCH passwordProfile -> " + $_.Exception.Message)
+        $errors.Add('PATCH passwordProfile -> ' + (Get-IRGraphError $_))
     }
 
-    return [pscustomobject]@{ Success = $false; Method = $null; Errors = $errors }
+    return [pscustomobject]@{ Success = $false; Confirmed = $false; Method = $null; Detail = ''; Errors = $errors }
 }
 
-$script:passwordReset   = $false
+$script:passwordReset          = $false
+$script:passwordResetConfirmed = $false
 $script:sessionsRevoked = $false
 $script:signInBlocked   = $false
 $script:mfaStatus       = 'not attempted'
@@ -1416,9 +1585,11 @@ if ($Remediate) {
 
     Write-Host "  [1] Reset password TWICE                                    [PROMPTED yes/no]" -ForegroundColor Magenta
     Write-Host ("      POST  /v1.0/users/{0}/authentication/methods/{1}/resetPassword   {{ newPassword:'<random-20>' }}   # pass 1 - throwaway" -f $uid, $script:PasswordMethodId) -ForegroundColor DarkGray
+    Write-Host ("      GET   {{Location}} -> /v1.0/users/{0}/authentication/operations/{{id}}   # polled until succeeded/failed" -f $uid) -ForegroundColor DarkGray
     Write-Host ("      fallback if that fails: PATCH /v1.0/users/{0}  {{ passwordProfile: {{ password, forceChangePasswordNextSignIn:true }} }}" -f $uid) -ForegroundColor DarkGray
     Write-Host "      (wait 5s)" -ForegroundColor DarkGray
     Write-Host "      ...then the same again for pass 2 - hand-over" -ForegroundColor DarkGray
+    Write-Host ("      GET   /v1.0/users/{0}?`$select=lastPasswordChangeDateTime   # before/after cross-check" -f $uid) -ForegroundColor DarkGray
     if ($script:upnHealth -and (-not $script:upnHealth.SuffixVerified -or $script:upnHealth.InvalidCharacters -ne '(none)')) {
         Write-Host "      [WARN] this user's UPN fails Graph validation - the PATCH fallback will fail. See UPN HEALTH." -ForegroundColor Red
     }
@@ -1501,20 +1672,44 @@ if ($Remediate) {
         # The previous version printed "Password reset done" and then handed the
         # operator a password even when Graph had rejected the call - the worst
         # possible failure mode for an IR runbook.
-        $newPwd = $null; $resetMethod = $null; $resetErrors = @()
+        $newPwd = $null; $resetMethod = $null; $resetErrors = @(); $resetDetail = ''
+        $pwdChangedBefore = Get-IRLastPasswordChange -UserId $uid
         foreach ($pass in 1, 2) {
             $candidate = New-IRPassword
             $r = Invoke-IRPasswordReset -UserId $uid -Password $candidate
             if (-not $r.Success) {
-                $script:passwordReset = $false
+                $script:passwordReset = $false; $script:passwordResetConfirmed = $false
                 $resetErrors = $r.Errors
                 Write-Host ("  [FAILED] password reset {0}/2 - no Graph route succeeded:" -f $pass) -ForegroundColor Red
                 foreach ($e in $r.Errors) { Write-Host "     - $e" -ForegroundColor Red }
                 break
             }
-            $newPwd = $candidate; $resetMethod = $r.Method; $script:passwordReset = $true
-            Write-Host ("  Password reset {0}/2 OK (via {1})." -f $pass, $r.Method) -ForegroundColor Green
+            $newPwd = $candidate; $resetMethod = $r.Method; $resetDetail = [string]$r.Detail
+            $resetErrors = $r.Errors
+            $script:passwordReset = $true
+            $script:passwordResetConfirmed = [bool]$r.Confirmed
+            if ($r.Confirmed) {
+                Write-Host ("  Password reset {0}/2 CONFIRMED by Graph (via {1})." -f $pass, $r.Method) -ForegroundColor Green
+            } else {
+                Write-Host ("  Password reset {0}/2 ACCEPTED but NOT CONFIRMED (via {1})." -f $pass, $r.Method) -ForegroundColor DarkYellow
+                Write-Host ("     {0}" -f $resetDetail) -ForegroundColor DarkYellow
+            }
             if ($pass -eq 1) { Start-Sleep -Seconds 5 }
+        }
+
+        # Independent cross-check against the directory's own record of the last
+        # password change. This is the check that would have caught the failure
+        # where Graph rejected every reset and the operator was still handed a
+        # password. Advisory: it can lag, and on a synced account it tracks the
+        # on-premises change.
+        $stamped = 'unknown'
+        if ($script:passwordReset -and $pwdChangedBefore) {
+            foreach ($try in 1..6) {
+                $after = Get-IRLastPasswordChange -UserId $uid
+                if ($after -and $after -gt $pwdChangedBefore) { $stamped = 'moved'; break }
+                $stamped = 'unchanged'
+                if ($try -lt 6) { Start-Sleep -Seconds 5 }
+            }
         }
 
         if ($script:passwordReset) {
@@ -1526,6 +1721,20 @@ if ($Remediate) {
             Write-Host "      $newPwd" -ForegroundColor Yellow
             Write-Host ""
             Write-Host ("  set via: {0}   user must change it at next sign-in" -f $resetMethod) -ForegroundColor DarkGray
+            if ($script:passwordResetConfirmed) {
+                Write-Host "  status : CONFIRMED - Graph reported the reset operation succeeded." -ForegroundColor Green
+            } else {
+                Write-Host "  status : NOT CONFIRMED - Graph accepted the reset but never reported it complete:" -ForegroundColor Red
+                Write-Host ("           {0}" -f $resetDetail) -ForegroundColor Red
+                Write-Host "           VERIFY this password works before you tell the user the account is contained." -ForegroundColor Red
+            }
+            if ($stamped -eq 'moved') {
+                Write-Host "  directory: lastPasswordChangeDateTime moved - the reset landed on the object." -ForegroundColor Green
+            } elseif ($stamped -eq 'unchanged') {
+                Write-Host "  directory: lastPasswordChangeDateTime has NOT moved 30s after the reset." -ForegroundColor Red
+                Write-Host "             It can lag, and it follows the on-premises change on a synced account," -ForegroundColor DarkYellow
+                Write-Host "             so this is not proof of failure - but VERIFY the credential works." -ForegroundColor DarkYellow
+            }
             Write-Host "  ===================================================" -ForegroundColor Yellow
             if ($EmitTempPasswordFile) {
                 $pwdFile = Join-Path $OutputPath ("{0}_TEMP_PASSWORD.txt" -f $IssueId)
@@ -1534,6 +1743,12 @@ if ($Remediate) {
             }
             Read-Host "  Press ENTER once the credential has been captured" | Out-Null
             Start-IRTranscript
+            if (-not $script:passwordResetConfirmed) {
+                Add-Finding 'Password reset was ACCEPTED but never confirmed by Graph - verify the credential works before treating the account as contained.' 'HIGH'
+            }
+            if ($stamped -eq 'unchanged') {
+                Add-Finding 'lastPasswordChangeDateTime did not move after the reset - the new password may not have taken effect.' 'MEDIUM'
+            }
         } else {
             Write-Host ""
             Write-Host "  !! PASSWORD WAS NOT CHANGED - the account is still on the attacker-known password." -ForegroundColor Red
@@ -1656,13 +1871,27 @@ if ($Remediate) {
     if ($BlockSignIn) {
         Write-Host ""
         if ($PSCmdlet.ShouldProcess($UserPrincipalName,'Block sign-in (AccountEnabled=$false)')) {
-            # Same UpdateExpanded serialization bug as the password reset above.
-            Invoke-MgGraphRequest -Method PATCH -ErrorAction Stop `
-                -Uri ("https://graph.microsoft.com/v1.0/users/{0}" -f $uid) `
-                -ContentType 'application/json' `
-                -Body @{ accountEnabled = $false } | Out-Null
-            Write-Host "  Account sign-in BLOCKED." -ForegroundColor Green
-            $script:signInBlocked = $true
+            # PATCH revalidates the whole user entity, so this fails on exactly
+            # the tenants where the password reset's PATCH fallback fails. There
+            # is no action-based alternative for accountEnabled, so all this can
+            # do is refuse to report a block that Graph rejected.
+            try {
+                Invoke-MgGraphRequest -Method PATCH -ErrorAction Stop `
+                    -Uri ("https://graph.microsoft.com/v1.0/users/{0}" -f $uid) `
+                    -ContentType 'application/json' `
+                    -Body @{ accountEnabled = $false } | Out-Null
+                Write-Host "  Account sign-in BLOCKED." -ForegroundColor Green
+                $script:signInBlocked = $true
+            } catch {
+                $blockErr = Get-IRGraphError $_
+                Write-Host ("  [FAILED] sign-in NOT blocked: {0}" -f $blockErr) -ForegroundColor Red
+                if ($blockErr -match 'userPrincipalName') {
+                    Write-Host "     Graph rejected the stored userPrincipalName on this object - see UPN HEALTH." -ForegroundColor Yellow
+                    Write-Host "     Block the account in the Entra portal, or disable it in on-premises AD if synced." -ForegroundColor Yellow
+                }
+                Add-Finding 'BLOCK SIGN-IN FAILED - the account can still sign in.' 'HIGH'
+                $script:signInBlocked = $false
+            }
         }
     }
 
@@ -1676,11 +1905,19 @@ if ($Remediate) {
         Add-Triage ("Devices wiped          : {0}" -f $script:deviceStatus) 'Magenta'
         Add-Triage ("Sign-in blocked        : {0}" -f $(if ($BlockSignIn) { 'WOULD RUN' } else { 'not planned (-BlockSignIn not set)' })) 'Magenta'
     } else {
-        Add-Triage ("Password reset x2      : {0}" -f $(if ($script:passwordReset) { 'DONE (new password printed to terminal, force-change at next sign-in)' } elseif ($doAuto) { 'FAILED - account NOT contained, see remediation output' } else { 'DECLINED by operator' })) $(if ($script:passwordReset) { 'Green' } elseif ($doAuto) { 'Red' } else { 'Yellow' })
+        Add-Triage ("Password reset x2      : {0}" -f $(
+            if ($script:passwordReset -and $script:passwordResetConfirmed) { 'DONE + CONFIRMED (new password printed to terminal, force-change at next sign-in)' }
+            elseif ($script:passwordReset) { 'ACCEPTED but NOT CONFIRMED - verify the credential works before closing' }
+            elseif ($doAuto) { 'FAILED - account NOT contained, see remediation output' }
+            else { 'DECLINED by operator' })) $(
+            if ($script:passwordReset -and $script:passwordResetConfirmed) { 'Green' }
+            elseif ($script:passwordReset) { 'DarkYellow' }
+            elseif ($doAuto) { 'Red' }
+            else { 'Yellow' })
+        Add-Triage ("Sign-in blocked        : {0}" -f $(if ($BlockSignIn) { $(if ($script:signInBlocked) { 'YES' } else { 'FAILED - account can still sign in' }) } else { 'not planned (-BlockSignIn not set)' })) $(if (-not $BlockSignIn) { 'Gray' } elseif ($script:signInBlocked) { 'Green' } else { 'Red' })
         Add-Triage ("Sessions revoked x2    : {0}" -f $(if ($script:sessionsRevoked) { 'DONE (user signed out everywhere)' } else { 'DECLINED by operator' })) $(if ($script:sessionsRevoked) { 'Green' } else { 'Yellow' })
         Add-Triage ("MFA methods reset      : {0}" -f $script:mfaStatus)    $(if ($script:mfaStatus    -match 'deleted') { 'Green' } else { 'Yellow' })
         Add-Triage ("Devices wiped          : {0}" -f $script:deviceStatus) $(if ($script:deviceStatus -match 'deleted') { 'Green' } else { 'Yellow' })
-        Add-Triage ("Sign-in blocked        : {0}" -f $(if ($script:signInBlocked) { 'YES' } else { 'no' }))
     }
     Add-Triage "Forwarding             : NOT changed (manual - see above)" 'DarkYellow'
     Add-Triage "Inbox rules            : NOT changed (manual - see above)" 'DarkYellow'
