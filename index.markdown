@@ -12,6 +12,7 @@ Here you can find all my notes and resources for OSCP, styled with a cyberpunk t
 - [Directory Enumeration Cheat Sheet](/directory-enumeration/)
 - [Run Books](/run-books/)
 - [Blog Posts](/posts/)
+- [Utility Code Snippets](/code-snippets/)
 
 ## How to Use These Resources
 
